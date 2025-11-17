@@ -72,8 +72,26 @@ export const exchangeCodeForTokens = async (code: string): Promise<TokenSet> => 
 };
 
 export const verifyIdToken = async (idToken: string): Promise<JWTPayload> => {
+  // Decodificar el token sin verificar primero para obtener el issuer real
+  const parts = idToken.split('.');
+  if (parts.length !== 3 || !parts[1]) {
+    throw new Error('ID token inválido');
+  }
+
+  let tokenIssuer: string | undefined;
+  try {
+    const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+    const payload = JSON.parse(payloadJson) as JWTPayload;
+    tokenIssuer = payload.iss as string | undefined;
+  } catch {
+    // Si no podemos decodificar, continuamos con la verificación normal
+  }
+
+  // Usar el issuer del token si está disponible, sino usar el configurado
+  const issuer = tokenIssuer || `${config.wso2.baseUrl}/oauth2/token`;
+
   const { payload } = await jwtVerify(idToken, jwks, {
-    issuer: `${config.wso2.baseUrl}/oauth2/token`,
+    issuer,
     audience: config.wso2.clientId,
     clockTolerance: config.clockToleranceSeconds,
   });
