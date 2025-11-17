@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página Protegida - Mini App WSO2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2em;
+            font-weight: 700;
+        }
+
+        .logout-button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1em;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .logout-button:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+        }
+
+        .user-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .user-info h2 {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .info-label {
+            font-weight: 600;
+            margin-right: 10px;
+            min-width: 100px;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 Página Protegida</h1>
+            <a href="/logout" class="logout-button">Cerrar Sesión</a>
+        </div>
+
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Cargando información del usuario...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadUserInfo() {
+            const contentEl = document.getElementById('content');
+            
+            try {
+                const response = await fetch('/me');
+                
+                if (response.status === 401) {
+                    // No autenticado, redirigir a inicio
+                    contentEl.innerHTML = `
+                        <div class="error">
+                            <h3>❌ No autorizado</h3>
+                            <p>No tienes una sesión activa. Por favor, inicia sesión.</p>
+                            <a href="/" class="back-link">← Volver al inicio</a>
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('Error al cargar información del usuario');
+                }
+
+                const userData = await response.json();
+                
+                contentEl.innerHTML = `
+                    <div class="success-badge">✓ Sesión activa</div>
+                    <div class="user-info">
+                        <h2>👤 Información del Usuario</h2>
+                        <div class="info-item">
+                            <span class="info-label">ID:</span>
+                            <span class="info-value">${userData.sub || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Nombre:</span>
+                            <span class="info-value">${userData.name || 'No disponible'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Email:</span>
+                            <span class="info-value">${userData.email || 'No disponible'}</span>
+                        </div>
+                    </div>
+                    <a href="/" class="back-link">← Volver al inicio</a>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                contentEl.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error</h3>
+                        <p>No se pudo cargar la información del usuario. Por favor, intenta nuevamente.</p>
+                        <a href="/" class="back-link">← Volver al inicio</a>
+                    </div>
+                `;
+            }
+        }
+
+        // Cargar información al cargar la página
+        loadUserInfo();
+    </script>
+</body>
+</html>
+
