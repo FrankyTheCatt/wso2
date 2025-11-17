@@ -138,11 +138,6 @@ app.get('/me', requireAuth, (req, res) => {
   });
 });
 
-// Ruta para dashboard (protegida por Nginx, pero también protegida aquí por si acaso)
-app.get('/dashboard', requireAuth, (_req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'dashboard.html'));
-});
-
 app.get('/logout', (req, res) => {
   const sessionId = req.signedCookies?.[SESSION_COOKIE] ?? req.cookies?.[SESSION_COOKIE];
   const session = sessionStore.getSession(sessionId);

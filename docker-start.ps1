@@ -89,19 +89,6 @@ if (-not $hostIP) {
     Write-Host "[OK] IP del host detectada: $hostIP" -ForegroundColor Green
 }
 
-# Comparar con IP en .env
-if (Test-Path ".env") {
-    $envContent = Get-Content ".env" -Raw
-    if ($envContent -match "APP_BASE_URL=http://([^\s]+)") {
-        $envIP = $matches[1]
-        if ($envIP -ne $hostIP -and $envIP -ne "localhost") {
-            Write-Host ""
-            Write-Host "[ADVERTENCIA] La IP en .env ($envIP) es diferente a la detectada ($hostIP)" -ForegroundColor Yellow
-            Write-Host "[INFO] Para actualizar el .env, ejecuta: .\scripts\detect-host-ip.ps1" -ForegroundColor Cyan
-        }
-    }
-}
-
 # Verificar estado
 Write-Host ""
 Write-Host "Estado de los contenedores:" -ForegroundColor Cyan
