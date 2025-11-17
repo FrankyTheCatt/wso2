@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil - Mini App WSO2</title>
+    <link rel="stylesheet" href="/common.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👤 Perfil de Usuario</h1>
+            <a href="/logout" class="logout-button">Cerrar Sesión</a>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="/protected.html" class="nav-link">Inicio</a>
+            <a href="/dashboard.html" class="nav-link">Dashboard</a>
+            <a href="/devices.html" class="nav-link">Dispositivos</a>
+            <a href="/profile.html" class="nav-link active">Perfil</a>
+            <a href="/settings.html" class="nav-link">Configuración</a>
+        </nav>
+
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Cargando información del perfil...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Verificar autenticación inmediatamente al cargar la página
+        (async function checkAuthFirst() {
+            try {
+                const response = await fetch('/auth-check', { method: 'GET' });
+                if (response.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+            } catch (error) {
+                const currentUrl = window.location.pathname + window.location.search;
+                window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                return;
+            }
+        })();
+
+        async function loadProfile() {
+            const contentEl = document.getElementById('content');
+            
+            try {
+                const response = await fetch('/me');
+                
+                if (response.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('Error al cargar información del usuario');
+                }
+
+                const userData = await response.json();
+                
+                contentEl.innerHTML = `
+                    <div class="success-badge">✓ Sesión activa</div>
+                    <div class="user-info">
+                        <h2>👤 Información del Usuario</h2>
+                        <div class="info-item">
+                            <span class="info-label">ID:</span>
+                            <span class="info-value">${userData.sub || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Nombre:</span>
+                            <span class="info-value">${userData.name || 'No disponible'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Email:</span>
+                            <span class="info-value">${userData.email || 'No disponible'}</span>
+                        </div>
+                    </div>
+
+                    <div class="info-section">
+                        <h2>Información de la Sesión</h2>
+                        <p>Tu sesión está activa y autenticada con WSO2 Identity Server.</p>
+                        <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                            Si necesitas cerrar sesión, puedes hacerlo desde cualquier página usando el botón "Cerrar Sesión".
+                        </p>
+                    </div>
+
+                    <div style="margin-top: 30px;">
+                        <a href="/dashboard.html" class="back-link">← Volver al Dashboard</a>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                contentEl.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error</h3>
+                        <p>No se pudo cargar la información del perfil.</p>
+                        <a href="/protected.html" class="back-link">← Volver al inicio</a>
+                    </div>
+                `;
+            }
+        }
+
+        loadProfile();
+    </script>
+</body>
+</html>
+

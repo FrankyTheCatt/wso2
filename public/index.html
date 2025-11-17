@@ -110,6 +110,22 @@
             margin-top: 15px;
             font-size: 0.9em;
         }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+            text-align: left;
+        }
+
+        .error-message strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 1.05em;
+        }
     </style>
 </head>
 <body>
@@ -117,7 +133,9 @@
         <h1>🚀 Mini App WSO2</h1>
         <p class="subtitle">Autenticación OAuth2/OIDC</p>
         
-        <a href="/login" class="login-button">Iniciar Sesión</a>
+        <div id="error-container"></div>
+        
+        <a href="/login" class="login-button" id="login-button">Iniciar Sesión</a>
         
         <div class="info">
             <div id="auth-status">
@@ -131,6 +149,42 @@
     </div>
 
     <script>
+        // Verificar si hay un error en la URL
+        function checkUrlError() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            const redirect = urlParams.get('redirect');
+            
+            if (error === 'session_required') {
+                const errorContainer = document.getElementById('error-container');
+                const loginButton = document.getElementById('login-button');
+                
+                let errorMessage = '<div class="error-message"><strong>⚠️ Sesión requerida</strong>Necesitas tener una sesión activa para acceder a esa página.';
+                
+                if (redirect) {
+                    const redirectUrl = decodeURIComponent(redirect);
+                    errorMessage += `<br><small style="color: #856404;">Intentaste acceder a: <code>${redirectUrl}</code></small>`;
+                    
+                    // Guardar la URL de redirección en sessionStorage para después del login
+                    sessionStorage.setItem('redirectAfterLogin', redirectUrl);
+                    
+                    // Actualizar el botón de login para que guarde la redirección
+                    const loginButton = document.getElementById('login-button');
+                    loginButton.onclick = function(e) {
+                        e.preventDefault();
+                        sessionStorage.setItem('redirectAfterLogin', redirectUrl);
+                        window.location.href = '/login';
+                    };
+                }
+                
+                errorMessage += '</div>';
+                errorContainer.innerHTML = errorMessage;
+                
+                // Limpiar la URL removiendo los parámetros de error
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+
         // Verificar el estado de autenticación al cargar la página
         async function checkAuthStatus() {
             try {
@@ -138,11 +192,21 @@
                 if (response.ok) {
                     const statusEl = document.getElementById('auth-status');
                     const messageEl = document.getElementById('status-message');
+                    const loginButton = document.getElementById('login-button');
+                    
                     statusEl.innerHTML = '<span class="status-indicator authenticated"></span><span>Autenticado</span>';
                     messageEl.textContent = 'Ya tienes una sesión activa. Puedes acceder a la página protegida.';
                     
-                    // Agregar botón para ir a la página protegida
-                    const loginButton = document.querySelector('.login-button');
+                    // Verificar si hay una redirección guardada
+                    const redirectAfterLogin = sessionStorage.getItem('redirectAfterLogin');
+                    if (redirectAfterLogin) {
+                        sessionStorage.removeItem('redirectAfterLogin');
+                        // Redirigir automáticamente a la página que intentaba acceder
+                        window.location.href = redirectAfterLogin;
+                        return;
+                    }
+                    
+                    // Cambiar botón para ir a la página protegida
                     loginButton.textContent = 'Ir a Página Protegida';
                     loginButton.href = '/protected.html';
                 }
@@ -152,7 +216,10 @@
             }
         }
 
-        // Verificar al cargar la página
+        // Verificar error en URL primero
+        checkUrlError();
+        
+        // Verificar estado de autenticación
         checkAuthStatus();
     </script>
 </body>

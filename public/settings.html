@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración - Mini App WSO2</title>
+    <link rel="stylesheet" href="/common.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Configuración</h1>
+            <a href="/logout" class="logout-button">Cerrar Sesión</a>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="/protected.html" class="nav-link">Inicio</a>
+            <a href="/dashboard.html" class="nav-link">Dashboard</a>
+            <a href="/devices.html" class="nav-link">Dispositivos</a>
+            <a href="/profile.html" class="nav-link">Perfil</a>
+            <a href="/settings.html" class="nav-link active">Configuración</a>
+        </nav>
+
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Cargando configuración...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Verificar autenticación inmediatamente al cargar la página
+        (async function checkAuthFirst() {
+            try {
+                const response = await fetch('/auth-check', { method: 'GET' });
+                if (response.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+            } catch (error) {
+                const currentUrl = window.location.pathname + window.location.search;
+                window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                return;
+            }
+        })();
+
+        async function loadSettings() {
+            const contentEl = document.getElementById('content');
+            
+            try {
+                // Verificar autenticación
+                const authResponse = await fetch('/auth-check');
+                if (authResponse.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+
+                // Cargar estado de servicios
+                let menderStatus = null;
+                try {
+                    const menderHealthResponse = await fetch('/api/mender/health');
+                    if (menderHealthResponse.ok) {
+                        menderStatus = await menderHealthResponse.json();
+                    }
+                } catch (err) {
+                    console.error('Error cargando estado de Mender:', err);
+                }
+
+                contentEl.innerHTML = `
+                    <div class="settings-section">
+                        <h2>🔧 Estado de Servicios</h2>
+                        
+                        <div class="setting-item">
+                            <div class="setting-header">
+                                <h3>WSO2 Identity Server</h3>
+                                <span class="status-badge healthy">✓ Conectado</span>
+                            </div>
+                            <p>Autenticación OAuth2/OIDC activa y funcionando correctamente.</p>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-header">
+                                <h3>Mender.io</h3>
+                                <span class="status-badge ${menderStatus?.enabled ? (menderStatus.healthy ? 'healthy' : 'unhealthy') : 'disabled'}">
+                                    ${menderStatus?.enabled ? (menderStatus.healthy ? '✓ Operativo' : '✗ No disponible') : '○ No configurado'}
+                                </span>
+                            </div>
+                            <p>
+                                ${menderStatus?.enabled 
+                                    ? (menderStatus.healthy 
+                                        ? 'Mender está configurado y operativo.'
+                                        : 'Mender está configurado pero el servidor no está disponible.')
+                                    : 'Mender no está configurado. Configura MENDER_SERVER_URL y MENDER_API_TOKEN en el archivo .env para habilitarlo.'}
+                            </p>
+                            ${menderStatus?.serverUrl ? `
+                                <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                                    Servidor: ${menderStatus.serverUrl}
+                                </p>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h2>📚 Información</h2>
+                        <div class="info-section">
+                            <h3>Configuración de Mender</h3>
+                            <p>Para configurar Mender.io, edita el archivo <code>.env</code> y agrega:</p>
+                            <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin-top: 10px; overflow-x: auto;">
+MENDER_SERVER_URL=https://hosted.mender.io
+MENDER_API_TOKEN=tu_token_aqui</pre>
+                            <p style="margin-top: 15px;">
+                                Consulta <a href="https://github.com/FrankyTheCatt/wso2/blob/master/MENDER_SETUP.md" target="_blank" style="color: #667eea;">MENDER_SETUP.md</a> para más información.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 30px;">
+                        <a href="/dashboard.html" class="back-link">← Volver al Dashboard</a>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                contentEl.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error</h3>
+                        <p>No se pudo cargar la configuración.</p>
+                        <a href="/protected.html" class="back-link">← Volver al inicio</a>
+                    </div>
+                `;
+            }
+        }
+
+        loadSettings();
+    </script>
+</body>
+</html>
+

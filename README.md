@@ -10,6 +10,9 @@ Implementación de referencia (Node.js + TypeScript + Express) que demuestra có
 - ✅ Gestión de sesiones locales con cookies firmadas
 - ✅ Logout front-channel con WSO2
 - ✅ Endpoints protegidos con middleware de autenticación
+- ✅ Integración con Mender.io para gestión de dispositivos IoT
+- ✅ Múltiples páginas protegidas con navegación integrada
+- ✅ Redirección automática cuando se accede sin sesión
 
 ## Requisitos
 
@@ -86,6 +89,10 @@ SESSION_SECRET=genera-una-cadena-larga-y-aleatoria-aqui
 SESSION_TTL_MS=3600000
 ALLOW_INSECURE_TLS=true
 CLOCK_TOLERANCE_SECONDS=300
+
+# Mender Configuration (opcional)
+MENDER_SERVER_URL=https://hosted.mender.io
+MENDER_API_TOKEN=tu_token_de_api_mender_aqui
 ```
 
 **Explicación de variables:**
@@ -97,6 +104,8 @@ CLOCK_TOLERANCE_SECONDS=300
 - `SESSION_SECRET`: Cadena aleatoria para firmar cookies (genera una con: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`)
 - `ALLOW_INSECURE_TLS`: `true` solo para desarrollo con certificados autofirmados
 - `CLOCK_TOLERANCE_SECONDS`: Margen para tolerar desfases horarios (ajusta según tu entorno)
+- `MENDER_SERVER_URL`: URL del servidor Mender.io (opcional, solo si usas Mender)
+- `MENDER_API_TOKEN`: Token de API de Mender.io (opcional, solo si usas Mender)
 
 ### 3. Ejecutar la aplicación
 
@@ -127,7 +136,11 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 ### Protegidos (requieren autenticación)
 
 - `GET /me` - Obtiene información del usuario autenticado
-- `GET /protected.html` - Página protegida de ejemplo
+- `GET /protected.html` - Página principal protegida
+- `GET /dashboard.html` - Dashboard con resumen del sistema
+- `GET /devices.html` - Gestión de dispositivos Mender
+- `GET /profile.html` - Perfil del usuario
+- `GET /settings.html` - Configuración del sistema
 - `GET /auth-check` - Verifica si hay una sesión válida (devuelve 200 o 401)
 
 ## Flujo de Autenticación
@@ -168,13 +181,20 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 ├── src/
 │   ├── config.ts          # Configuración y variables de entorno
 │   ├── oidcClient.ts      # Cliente OIDC (buildAuthorizeUrl, exchangeCodeForTokens, verifyIdToken)
+│   ├── menderClient.ts    # Cliente Mender para gestión de dispositivos IoT
 │   ├── server.ts          # Servidor Express con todos los endpoints
 │   └── sessionStore.ts   # Almacenamiento de sesiones en memoria
 ├── public/
 │   ├── index.html         # Página principal
-│   └── protected.html      # Página protegida de ejemplo
+│   ├── protected.html     # Página protegida principal
+│   ├── dashboard.html     # Dashboard del sistema
+│   ├── devices.html        # Gestión de dispositivos Mender
+│   ├── profile.html       # Perfil de usuario
+│   ├── settings.html      # Configuración del sistema
+│   └── common.css          # Estilos comunes para páginas protegidas
 ├── .env                   # Variables de entorno (no versionar)
 ├── env.sample             # Plantilla de variables de entorno
+├── MENDER_SETUP.md        # Guía detallada de configuración de Mender
 ├── package.json
 └── tsconfig.json
 ```
@@ -220,42 +240,119 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 
 ## Integración con Mender.io
 
-Esta aplicación incluye integración opcional con Mender.io para gestión de dispositivos IoT.
+Esta aplicación incluye integración opcional con Mender.io para gestión de dispositivos IoT. Mender.io es una plataforma de gestión de actualizaciones OTA (Over-The-Air) que permite gestionar y actualizar dispositivos IoT de forma remota y segura.
+
+### Características de la Integración
+
+- ✅ Conexión con Mender.io online (hosted.mender.io)
+- ✅ Visualización de dispositivos gestionados
+- ✅ Verificación del estado de salud de cada dispositivo
+- ✅ Información detallada de dispositivos (atributos, estado, última actualización)
+- ✅ Diagnóstico de problemas (razones de no saludable)
+- ✅ Página dedicada para gestión de dispositivos (`/devices.html`)
 
 ### Configuración de Mender.io Online
 
-1. **Obtener Token de API**:
-   - Inicia sesión en [https://hosted.mender.io](https://hosted.mender.io)
-   - Ve a **Settings** → **API Tokens**
-   - Crea un nuevo token con permisos `devices:read`
-   - Copia el token generado
+#### 1. Obtener Token de API
 
-2. **Configurar Variables de Entorno**:
-   ```env
-   MENDER_SERVER_URL=https://hosted.mender.io
-   MENDER_API_TOKEN=tu_token_aqui
+1. Inicia sesión en [https://hosted.mender.io](https://hosted.mender.io)
+2. Ve a **Settings** → **API Tokens**
+3. Haz clic en **Create API Token**
+4. Asigna un nombre descriptivo (ej: "Mini-App Integration")
+5. Selecciona los permisos necesarios:
+   - `devices:read` - Para leer información de dispositivos (requerido)
+   - `devices:write` - Si necesitas modificar dispositivos (opcional)
+6. Haz clic en **Create**
+7. **IMPORTANTE**: Copia el token inmediatamente, ya que solo se muestra una vez
+
+#### 2. Configurar Variables de Entorno
+
+Edita tu archivo `.env` y agrega:
+
+```env
+# Mender.io Online Configuration
+MENDER_SERVER_URL=https://hosted.mender.io
+MENDER_API_TOKEN=tu_token_aqui_pegado_del_paso_anterior
+```
+
+#### 3. Verificar la Integración
+
+1. Reinicia la aplicación:
+   ```bash
+   npm run dev
    ```
 
-3. **Verificar Integración**:
-   - Accede a `/protected.html` después de autenticarte
-   - Deberías ver la sección de Mender con tus dispositivos
+2. Accede a cualquier página protegida después de autenticarte con WSO2:
+   - `/protected.html` - Verás la sección de Mender con tus dispositivos
+   - `/devices.html` - Página dedicada para gestión de dispositivos
+   - `/dashboard.html` - Dashboard con resumen de dispositivos
 
-Para más detalles, consulta [MENDER_SETUP.md](./MENDER_SETUP.md)
+3. Deberías ver:
+   - ✅ Estado del servidor Mender (Operativo/No disponible)
+   - 📱 Lista de tus dispositivos gestionados
+   - 📊 Estado de salud de cada dispositivo
+   - ⚠️ Razones de no saludable si aplica
+   - 📋 Atributos detallados de cada dispositivo
 
-### Endpoints de Mender (requieren autenticación)
+### Endpoints de Mender (requieren autenticación WSO2)
 
 - `GET /api/mender/health` - Estado del servidor Mender
+  - Devuelve: `{ enabled: boolean, healthy: boolean, serverUrl: string }`
+  
 - `GET /api/mender/devices` - Lista todos los dispositivos
-- `GET /api/mender/devices/:deviceId` - Información de un dispositivo
+  - Devuelve: `{ devices: MenderDevice[] }`
+  
+- `GET /api/mender/devices/:deviceId` - Información detallada de un dispositivo
+  - Devuelve: `{ deviceId, status, healthy, lastSeen, created, attributes, healthReason, timeSinceUpdateFormatted }`
 
-## Próximos Pasos
+### Criterios de Salud de Dispositivos
 
-- Persistir sesiones en Redis o base de datos en lugar de memoria
-- Implementar refresh token para renovar sesiones sin re-login
-- Agregar más endpoints protegidos según tus necesidades
-- Configurar HTTPS para producción
-- Agregar logging y monitoreo
+Un dispositivo se considera **saludable** cuando:
+- ✅ Estado es `accepted` (aceptado en Mender)
+- ✅ Última actualización fue hace menos de 24 horas
 
-## Licencia
+Si un dispositivo no cumple estos criterios, se muestra como **no saludable** con la razón específica.
 
-ISC
+### Páginas Relacionadas con Mender
+
+- **`/protected.html`** - Muestra información básica de Mender y dispositivos
+- **`/devices.html`** - Página completa de gestión de dispositivos con información detallada
+- **`/dashboard.html`** - Dashboard con resumen de dispositivos
+- **`/settings.html`** - Estado de configuración de Mender
+
+### Solución de Problemas con Mender
+
+#### Error: "Mender no está configurado"
+
+**Problema**: Las variables de entorno no están configuradas.
+
+**Solución**: 
+- Verifica que `MENDER_SERVER_URL` y `MENDER_API_TOKEN` estén en tu archivo `.env`
+- Reinicia la aplicación después de agregar las variables
+
+#### Error: "401 Unauthorized" o "403 Forbidden"
+
+**Problema**: El token de API no es válido o no tiene los permisos necesarios.
+
+**Solución**:
+- Verifica que el token esté correctamente copiado (sin espacios extra)
+- Asegúrate de que el token tenga el permiso `devices:read`
+- Genera un nuevo token si es necesario
+
+#### Error: "404 Not Found" al obtener dispositivos
+
+**Problema**: La ruta de la API puede estar incorrecta.
+
+**Solución**: 
+- Verifica que `MENDER_SERVER_URL` sea `https://hosted.mender.io` (sin trailing slash)
+- La aplicación usa automáticamente la ruta `/api/management/v1/inventory/devices`
+
+#### No se muestran dispositivos
+
+**Problema**: No hay dispositivos registrados o no tienes permisos para verlos.
+
+**Solución**:
+- Verifica en el dashboard de Mender.io que tengas dispositivos registrados
+- Asegúrate de que el token tenga permisos para leer dispositivos
+- Verifica que los dispositivos estén en estado "accepted"
+

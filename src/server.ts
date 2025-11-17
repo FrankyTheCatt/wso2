@@ -32,6 +32,12 @@ const getSessionFromRequest = (req: Request) => {
 const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   const session = getSessionFromRequest(req);
   if (!session) {
+    // Si es una petición HTML, redirigir a la página principal con mensaje de error
+    const acceptsHtml = req.accepts('html');
+    if (acceptsHtml) {
+      return res.redirect(`/?error=session_required&redirect=${encodeURIComponent(req.originalUrl)}`);
+    }
+    // Para APIs, devolver JSON
     return res.status(401).json({ error: 'No autenticado' });
   }
   (req as Request & { session?: typeof session }).session = session;
@@ -212,6 +218,22 @@ app.get('/api/mender/health', requireAuth, async (_req, res) => {
 
 app.get('/protected.html', requireAuth, (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'protected.html'));
+});
+
+app.get('/dashboard.html', requireAuth, (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'dashboard.html'));
+});
+
+app.get('/devices.html', requireAuth, (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'devices.html'));
+});
+
+app.get('/profile.html', requireAuth, (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'profile.html'));
+});
+
+app.get('/settings.html', requireAuth, (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'settings.html'));
 });
 
 app.get('/logout', (req, res) => {

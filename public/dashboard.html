@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Mini App WSO2</title>
+    <link rel="stylesheet" href="/common.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Dashboard</h1>
+            <a href="/logout" class="logout-button">Cerrar Sesión</a>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="/protected.html" class="nav-link">Inicio</a>
+            <a href="/dashboard.html" class="nav-link active">Dashboard</a>
+            <a href="/devices.html" class="nav-link">Dispositivos</a>
+            <a href="/profile.html" class="nav-link">Perfil</a>
+            <a href="/settings.html" class="nav-link">Configuración</a>
+        </nav>
+
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Cargando información del dashboard...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Verificar autenticación inmediatamente al cargar la página
+        (async function checkAuthFirst() {
+            try {
+                const response = await fetch('/auth-check', { method: 'GET' });
+                if (response.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+            } catch (error) {
+                const currentUrl = window.location.pathname + window.location.search;
+                window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                return;
+            }
+        })();
+
+        async function loadDashboard() {
+            const contentEl = document.getElementById('content');
+            
+            try {
+                // Cargar información del usuario
+                const userResponse = await fetch('/me');
+                if (userResponse.status === 401) {
+                    // Redirigir a la página principal con mensaje de error
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+                
+                if (!userResponse.ok) {
+                    throw new Error('Error al cargar información del usuario');
+                }
+                
+                const userData = await userResponse.json();
+
+                // Cargar información de Mender si está disponible
+                let menderHealth = null;
+                let deviceCount = 0;
+                try {
+                    const menderHealthResponse = await fetch('/api/mender/health');
+                    if (menderHealthResponse.ok) {
+                        menderHealth = await menderHealthResponse.json();
+                        if (menderHealth.enabled && menderHealth.healthy) {
+                            const devicesResponse = await fetch('/api/mender/devices');
+                            if (devicesResponse.ok) {
+                                const devicesData = await devicesResponse.json();
+                                deviceCount = devicesData.devices?.length || 0;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error cargando información de Mender:', err);
+                }
+
+                contentEl.innerHTML = `
+                    <div class="dashboard-grid">
+                        <div class="dashboard-card">
+                            <div class="card-icon">👤</div>
+                            <div class="card-content">
+                                <h3>Usuario</h3>
+                                <p class="card-value">${userData.name || userData.email || 'Usuario'}</p>
+                                <a href="/profile.html" class="card-link">Ver perfil →</a>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <div class="card-icon">🔧</div>
+                            <div class="card-content">
+                                <h3>Mender</h3>
+                                <p class="card-value">${menderHealth?.enabled ? (menderHealth.healthy ? 'Operativo' : 'No disponible') : 'No configurado'}</p>
+                                <a href="/devices.html" class="card-link">Ver dispositivos →</a>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <div class="card-icon">📱</div>
+                            <div class="card-content">
+                                <h3>Dispositivos</h3>
+                                <p class="card-value">${deviceCount}</p>
+                                <a href="/devices.html" class="card-link">Gestionar →</a>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <div class="card-icon">⚙️</div>
+                            <div class="card-content">
+                                <h3>Configuración</h3>
+                                <p class="card-value">Sistema</p>
+                                <a href="/settings.html" class="card-link">Configurar →</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-section">
+                        <h2>Bienvenido, ${userData.name || userData.email || 'Usuario'}</h2>
+                        <p>Este es tu dashboard principal. Desde aquí puedes acceder a todas las funcionalidades de la aplicación.</p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                // Si es un error de autenticación, redirigir
+                if (error.message && error.message.includes('401')) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+                
+                contentEl.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error</h3>
+                        <p>No se pudo cargar la información del dashboard.</p>
+                        <a href="/protected.html" class="back-link">← Volver al inicio</a>
+                    </div>
+                `;
+            }
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispositivos - Mini App WSO2</title>
+    <link rel="stylesheet" href="/common.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Dispositivos Mender</h1>
+            <a href="/logout" class="logout-button">Cerrar Sesión</a>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="/protected.html" class="nav-link">Inicio</a>
+            <a href="/dashboard.html" class="nav-link">Dashboard</a>
+            <a href="/devices.html" class="nav-link active">Dispositivos</a>
+            <a href="/profile.html" class="nav-link">Perfil</a>
+            <a href="/settings.html" class="nav-link">Configuración</a>
+        </nav>
+
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Cargando dispositivos...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Verificar autenticación inmediatamente al cargar la página
+        (async function checkAuthFirst() {
+            try {
+                const response = await fetch('/auth-check', { method: 'GET' });
+                if (response.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+            } catch (error) {
+                const currentUrl = window.location.pathname + window.location.search;
+                window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                return;
+            }
+        })();
+
+        async function loadDevices() {
+            const contentEl = document.getElementById('content');
+            
+            try {
+                // Verificar autenticación
+                const authResponse = await fetch('/auth-check');
+                if (authResponse.status === 401) {
+                    const currentUrl = window.location.pathname + window.location.search;
+                    window.location.href = `/?error=session_required&redirect=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+
+                // Cargar información de Mender
+                const menderHealthResponse = await fetch('/api/mender/health');
+                if (!menderHealthResponse.ok) {
+                    contentEl.innerHTML = `
+                        <div class="error">
+                            <h3>⚠️ Mender no disponible</h3>
+                            <p>Mender no está configurado o no está disponible.</p>
+                            <a href="/settings.html" class="back-link">← Ir a configuración</a>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const menderHealth = await menderHealthResponse.json();
+                
+                if (!menderHealth.enabled) {
+                    contentEl.innerHTML = `
+                        <div class="info-section">
+                            <h2>Mender no está configurado</h2>
+                            <p>Para gestionar dispositivos, necesitas configurar Mender primero.</p>
+                            <a href="/settings.html" class="back-link">← Ir a configuración</a>
+                        </div>
+                    `;
+                    return;
+                }
+
+                if (!menderHealth.healthy) {
+                    contentEl.innerHTML = `
+                        <div class="error">
+                            <h3>⚠️ Servidor Mender no disponible</h3>
+                            <p>El servidor de Mender no está respondiendo correctamente.</p>
+                            <button class="refresh-button" onclick="location.reload()">🔄 Reintentar</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Cargar dispositivos
+                const devicesResponse = await fetch('/api/mender/devices');
+                if (!devicesResponse.ok) {
+                    throw new Error('Error al obtener dispositivos');
+                }
+
+                const devicesData = await devicesResponse.json();
+                const devices = devicesData.devices || [];
+
+                if (devices.length === 0) {
+                    contentEl.innerHTML = `
+                        <div class="info-section">
+                            <h2>No hay dispositivos</h2>
+                            <p>No se encontraron dispositivos registrados en Mender.</p>
+                            <button class="refresh-button" onclick="location.reload()">🔄 Actualizar</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let devicesHtml = `
+                    <div class="devices-header">
+                        <h2>Dispositivos (${devices.length})</h2>
+                        <button class="refresh-button" onclick="location.reload()">🔄 Actualizar</button>
+                    </div>
+                    <div class="devices-list">
+                `;
+
+                // Cargar estado de cada dispositivo
+                for (const device of devices.slice(0, 20)) {
+                    try {
+                        const deviceStatusResponse = await fetch(`/api/mender/devices/${device.id}`);
+                        if (deviceStatusResponse.ok) {
+                            const deviceStatus = await deviceStatusResponse.json();
+                            const statusClass = deviceStatus.healthy ? 'healthy' : 'unhealthy';
+                            const statusText = deviceStatus.healthy ? 'Saludable' : 'No saludable';
+                            
+                            const statusTranslations = {
+                                'accepted': 'Aceptado',
+                                'pending': 'Pendiente',
+                                'rejected': 'Rechazado',
+                                'preauthorized': 'Preautorizado',
+                                'not_found': 'No encontrado',
+                                'error': 'Error'
+                            };
+                            const statusTranslated = statusTranslations[deviceStatus.status] || deviceStatus.status;
+                            
+                            devicesHtml += `
+                                <div class="device-card">
+                                    <div class="device-header">
+                                        <span class="device-id">${device.id}</span>
+                                        <span class="status-badge ${statusClass}">${statusText}</span>
+                                    </div>
+                                    
+                                    <div class="device-details">
+                                        <div class="detail-row">
+                                            <span class="detail-label">Estado:</span>
+                                            <span class="detail-value"><strong>${statusTranslated}</strong></span>
+                                        </div>
+                                        ${deviceStatus.created ? `
+                                        <div class="detail-row">
+                                            <span class="detail-label">Creado:</span>
+                                            <span class="detail-value">${new Date(deviceStatus.created).toLocaleString()}</span>
+                                        </div>
+                                        ` : ''}
+                                        ${deviceStatus.lastSeen ? `
+                                        <div class="detail-row">
+                                            <span class="detail-label">Última actualización:</span>
+                                            <span class="detail-value">${new Date(deviceStatus.lastSeen).toLocaleString()}</span>
+                                        </div>
+                                        ` : ''}
+                                        ${deviceStatus.timeSinceUpdateFormatted ? `
+                                        <div class="detail-row">
+                                            <span class="detail-label">Tiempo desde actualización:</span>
+                                            <span class="detail-value">${deviceStatus.timeSinceUpdateFormatted}</span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    
+                                    ${deviceStatus.healthReason ? `
+                                    <div class="health-reason">
+                                        <strong>⚠️ Razón de no saludable:</strong><br>
+                                        ${deviceStatus.healthReason}
+                                    </div>
+                                    ` : ''}
+                                    
+                                    ${deviceStatus.attributes && Object.keys(deviceStatus.attributes).length > 0 ? `
+                                    <div class="attributes-section">
+                                        <div class="attributes-title">📋 Atributos:</div>
+                                        ${Object.entries(deviceStatus.attributes).slice(0, 5).map(([key, value]) => `
+                                            <div class="attribute-item">
+                                                <span class="attribute-name">${key}:</span>
+                                                <span class="attribute-value">${value}</span>
+                                            </div>
+                                        `).join('')}
+                                        ${Object.keys(deviceStatus.attributes).length > 5 ? `<p style="font-size: 0.85em; color: #666; margin-top: 5px;">... y ${Object.keys(deviceStatus.attributes).length - 5} más</p>` : ''}
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }
+                    } catch (err) {
+                        console.error(`Error obteniendo estado del dispositivo ${device.id}:`, err);
+                    }
+                }
+
+                devicesHtml += `</div>`;
+                contentEl.innerHTML = devicesHtml;
+            } catch (error) {
+                console.error('Error:', error);
+                contentEl.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error</h3>
+                        <p>No se pudieron cargar los dispositivos.</p>
+                        <button class="refresh-button" onclick="location.reload()">🔄 Reintentar</button>
+                    </div>
+                `;
+            }
+        }
+
+        loadDevices();
+    </script>
+</body>
+</html>
+
