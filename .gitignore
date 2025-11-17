@@ -35,9 +35,6 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
-# Docker
-.docker/
-
 # Temporary files
 tmp/
 temp/

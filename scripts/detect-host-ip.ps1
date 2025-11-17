@@ -100,8 +100,7 @@ Write-Host "  IP del host configurada: $selectedIP" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "La aplicacion estara disponible en:" -ForegroundColor Yellow
-Write-Host "  - http://$selectedIP (Nginx)" -ForegroundColor White
-Write-Host "  - http://$selectedIP:3000 (Mini-app directa)" -ForegroundColor White
+Write-Host "  - http://$selectedIP:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "[IMPORTANTE] Asegurate de actualizar la Callback URL en WSO2 con:" -ForegroundColor Yellow
 Write-Host "  - http://$selectedIP/callback" -ForegroundColor White

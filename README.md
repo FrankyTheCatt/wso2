@@ -1,228 +1,231 @@
-## Mini-App WSO2 + Nginx
+# Mini-App WSO2 OAuth2/OIDC
 
-Implementación de referencia (Node.js + TypeScript + Express) que demuestra cómo:
+Implementación de referencia (Node.js + TypeScript + Express) que demuestra cómo integrar autenticación OAuth2/OIDC con WSO2 Identity Server.
 
-- Registrar un Service Provider en WSO2 (Carbon) para usar OAuth2/OIDC.
-- Intercambiar el authorization code en backend, validar el ID Token y crear una sesión local.
-- Exponer endpoints `/callback`, `/auth-check`, `/me` y recursos estáticos.
-- Integrar Nginx como reverse proxy que protege `/recurso-protegido` usando `auth_request`.
+## Características
 
-### 1. Requisitos
+- ✅ Autenticación OAuth2/OIDC con WSO2 Identity Server
+- ✅ Intercambio seguro de authorization code por tokens
+- ✅ Validación de ID Token usando JWKS
+- ✅ Gestión de sesiones locales con cookies firmadas
+- ✅ Logout front-channel con WSO2
+- ✅ Endpoints protegidos con middleware de autenticación
 
-- Node.js >= 18 (o Docker si usas contenedores)
-- Acceso al portal Carbon de WSO2.
-- Nginx compilado con `ngx_http_auth_request_module` (o usar Docker).
+## Requisitos
 
-### 1.1. Opción A: Nginx en Docker (Recomendado)
+- Node.js >= 18
+- Acceso al portal Carbon de WSO2 Identity Server
+- Credenciales de Service Provider configuradas en WSO2
 
-Puedes ejecutar solo Nginx en Docker mientras la mini-app corre directamente en tu máquina:
+## Configuración en WSO2
 
-1. **Inicia la mini-app primero** (en una terminal):
-   ```bash
-   npm install
-   npm run dev
+### 1. Crear Service Provider
+
+1. Accede al portal Carbon: `https://<tu-ip>:9443/carbon`
+2. Ve a **Service Providers** → **Add**
+3. Define un nombre para tu aplicación (ej: `mini-app-wso2`)
+
+### 2. Configurar OAuth2/OIDC
+
+1. Dentro de la aplicación, ve a **Inbound Authentication Configuration** → **OAuth/OpenID Connect Configuration**
+2. En el campo **Callback URL**, configura las URLs de callback:
+
+   **Opción A: URLs separadas por salto de línea:**
    ```
-   La mini-app debe estar corriendo en `http://localhost:3000`
-
-2. **Configura el archivo `.env`** (copia `env.sample` y completa los valores)
-
-3. **Construye y levanta Nginx en Docker:**
-   ```bash
-   docker-compose up -d
-   ```
-   O usa el script: `.\docker-start.ps1` (Windows) o `./docker-start.sh` (Linux/Mac)
-
-4. **Verifica que todo está funcionando:**
-   ```bash
-   docker-compose ps
-   docker-compose logs -f nginx
+   http://<tu-ip>:3000/callback
+   http://<tu-ip>:3000/logout/callback
    ```
 
-La aplicación estará disponible en:
-- `http://localhost` → Nginx (Docker) → Mini-app (host:3000)
-- `http://localhost:3000` → Mini-app directamente
-
-**Nota:** Solo Nginx corre en Docker. La mini-app debe estar corriendo fuera de Docker en el puerto 3000.
-
-**Ver `DOCKER.md` para instrucciones detalladas y solución de problemas.**
-
-### 1.2. Opción B: Instalación Manual
-
-Si prefieres ejecutar sin Docker:
-
-- Instala Node.js >= 18
-- Instala Nginx con `ngx_http_auth_request_module`
-- Sigue las instrucciones de las secciones 3 y 5
-
-### 2. Configuración en WSO2
-
-1. Entra a `https://<tu-ip>:9443/carbon`.
-2. `Service Providers` → `Add`.
-3. Define un nombre (ej. `mini-app-nginx`).
-4. Dentro de la app ve a `Inbound Authentication Configuration` → `OAuth/OpenID Connect Configuration`.
-5. En el campo **Callback URL**, tienes dos opciones:
-
-   **Opción A: URLs separadas por salto de línea** (más simple):
+   **Opción B: Usar expresión regular (recomendado):**
    ```
-   http://172.31.112.1:3000/callback
-   http://172.31.112.1:3000/logout/callback
-   ```
-
-   **Opción B: Usar expresión regular** (más flexible, como el ejemplo por defecto de WSO2):
-   ```
-   regexp=(http://172.31.112.1:3000/(callback|logout/callback))
+   regexp=(http://<tu-ip>:3000/(callback|logout/callback))
    ```
    
-   O si quieres permitir cualquier puerto en esa IP:
+   O si quieres permitir cualquier puerto:
    ```
-   regexp=(http://172.31.112.1:\d+/(callback|logout/callback))
-   ```
-
-   **Nota:** Reemplaza `172.31.112.1` con la IP real de tu mini-app.
-
-6. Configura los Scopes: `openid profile email`
-7. Guarda y copia el `Client ID` y `Client Secret`.
-
-### 3. Configuración local
-
-1. Duplica `env.sample` → `.env` y rellena tus valores:
-   - `WSO2_BASE_URL=https://<tu-ip>:9443`
-   - `WSO2_CLIENT_ID` / `WSO2_CLIENT_SECRET`
-   - `APP_BASE_URL=http://<ip-de-tu-app>:3000`
-   - `SESSION_SECRET`: cadena larga aleatoria (se usa para firmar cookies).
-   - `ALLOW_INSECURE_TLS=true`: solo en entornos de prueba con certificados autofirmados. En producción debe ser `false` o eliminarse.
-   - `CLOCK_TOLERANCE_SECONDS=300`: margen para tolerar desfases horario entre tu servidor y WSO2 (ajusta según tu entorno).
-2. Instala dependencias:
-
-   ```bash
-   npm install
+   regexp=(http://<tu-ip>:\d+/(callback|logout/callback))
    ```
 
-3. Levanta en modo desarrollo:
+   **Nota:** Reemplaza `<tu-ip>` con la IP real donde correrá tu aplicación.
 
-   ```bash
-   npm run dev
-   ```
+3. Configura los **Scopes**: `openid profile email`
+4. Guarda y copia el **Client ID** y **Client Secret**
 
-   o construye + ejecuta:
+### 3. Configuración OAuth
 
-   ```bash
-   npm run build
-   npm start
-   ```
+- **OAuth Version**: 2.0
+- **Allowed Grant Types**: Marca **Code** (y **Refresh Token** si lo necesitas)
+- **PKCE Mandatory**: Opcional (déjalo desmarcado si no lo usas)
+- **Access Token Binding Type**: NONE
 
-### 4. Endpoints relevantes
+## Configuración Local
 
-- `GET /login`: redirige al endpoint de autorización de WSO2 con `state` y `nonce`.
-- `GET /callback`: recibe el `code`, lo intercambia en `/oauth2/token`, valida el `id_token` contra JWKS y crea la cookie `miniapp_session`.
-- `GET /auth-check`: responde `200` si la cookie de sesión es válida; caso contrario `401`.
-- `GET /me`: ejemplo de recurso protegido por Express.
-- `GET /logout`: destruye la sesión local, invoca `https://<WSO2>/oidc/logout` con `id_token_hint` y redirige al usuario hacia `/logout/callback`.
-- `GET /logout/callback`: verifica el `state` y regresa al usuario a `/` tras el logout de WSO2.
-
-### 5. Integración con Nginx
-
-Nginx actúa como **reverse proxy** y **guardián de autenticación** usando el módulo `ngx_http_auth_request_module`.
-
-#### 5.1. Verificar que Nginx tiene el módulo requerido
+### 1. Instalar dependencias
 
 ```bash
-nginx -V 2>&1 | grep -o with-http_auth_request_module
+npm install
 ```
 
-Si no aparece, necesitarás recompilar Nginx con `--with-http_auth_request_module` o instalar una versión que lo incluya.
+### 2. Configurar variables de entorno
 
-#### 5.2. Configurar Nginx
+Copia `env.sample` a `.env` y completa los valores:
 
-1. **Copia el archivo de ejemplo:**
-   ```bash
-   cp nginx.conf.example /etc/nginx/sites-available/mini-app
-   ```
-
-2. **Edita la configuración** (`/etc/nginx/sites-available/mini-app`):
-   - Cambia `server_name tu-dominio.com 172.31.112.1;` por tu dominio/IP real
-   - Ajusta `upstream mini_app` si tu app corre en otro puerto
-   - Personaliza las rutas protegidas según tus necesidades
-
-3. **Habilita el sitio:**
-   ```bash
-   ln -s /etc/nginx/sites-available/mini-app /etc/nginx/sites-enabled/
-   ```
-
-4. **Verifica la configuración:**
-   ```bash
-   nginx -t
-   ```
-
-5. **Recarga Nginx:**
-   ```bash
-   systemctl reload nginx
-   # O si usas otro método:
-   sudo nginx -s reload
-   ```
-
-#### 5.3. Cómo funciona
-
-1. **Usuario solicita `/recurso-protegido`**
-2. **Nginx ejecuta sub-petición interna** a `/auth-check` (endpoint interno, no accesible desde fuera)
-3. **La mini-app verifica la cookie de sesión:**
-   - Si existe y es válida → devuelve `200 OK`
-   - Si no existe o es inválida → devuelve `401 Unauthorized`
-4. **Nginx decide:**
-   - Si `200` → permite el acceso y pasa la petición al backend
-   - Si `401` → redirige al usuario a `/login` (inicia flujo OIDC)
-
-#### 5.4. Ejemplos de configuración
-
-**Proteger una ruta específica:**
-```nginx
-location /recurso-protegido/ {
-    auth_request /auth-check;
-    error_page 401 = @login;
-    proxy_pass http://mini_app;
-}
+```bash
+cp env.sample .env
 ```
 
-**Proteger múltiples rutas con patrón:**
-```nginx
-location ~ ^/(api|admin|dashboard)/ {
-    auth_request /auth-check;
-    error_page 401 = @login;
-    proxy_pass http://mini_app;
-}
+Edita `.env` con tus valores:
+
+```env
+WSO2_BASE_URL=https://<tu-ip-wso2>:9443
+WSO2_TENANT_DOMAIN=carbon.super
+WSO2_CLIENT_ID=tu_client_id_aqui
+WSO2_CLIENT_SECRET=tu_client_secret_aqui
+APP_BASE_URL=http://<tu-ip>:3000
+SESSION_SECRET=genera-una-cadena-larga-y-aleatoria-aqui
+SESSION_TTL_MS=3600000
+ALLOW_INSECURE_TLS=true
+CLOCK_TOLERANCE_SECONDS=300
 ```
 
-**Proteger todo excepto rutas públicas:**
-```nginx
-location / {
-    auth_request /auth-check;
-    error_page 401 = @login;
-    proxy_pass http://mini_app;
-}
+**Explicación de variables:**
 
-# Rutas públicas (sin auth_request)
-location ~ ^/(login|callback|logout|health|index\.html)$ {
-    proxy_pass http://mini_app;
-}
+- `WSO2_BASE_URL`: URL base de tu servidor WSO2 (ej: `https://172.31.125.215:9443`)
+- `WSO2_TENANT_DOMAIN`: Dominio del tenant (por defecto `carbon.super`)
+- `WSO2_CLIENT_ID` / `WSO2_CLIENT_SECRET`: Credenciales del Service Provider
+- `APP_BASE_URL`: URL donde correrá tu aplicación (debe coincidir con las Callback URLs en WSO2)
+- `SESSION_SECRET`: Cadena aleatoria para firmar cookies (genera una con: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`)
+- `ALLOW_INSECURE_TLS`: `true` solo para desarrollo con certificados autofirmados
+- `CLOCK_TOLERANCE_SECONDS`: Margen para tolerar desfases horarios (ajusta según tu entorno)
+
+### 3. Ejecutar la aplicación
+
+**Modo desarrollo:**
+```bash
+npm run dev
 ```
 
-Ver el archivo `nginx.conf.example` para una configuración completa y comentada.
+**Modo producción:**
+```bash
+npm run build
+npm start
+```
 
-### 6. Flujo resumido
+La aplicación estará disponible en `http://<tu-ip>:3000`
 
-1. Usuario hace clic en “Entrar con WSO2”.
-2. `/login` genera `state`/`nonce`, los guarda en una cookie firmada y redirige a WSO2.
-3. Tras autenticarse, WSO2 redirige a `/callback?code=...&state=...`.
-4. El backend:
-   - Valida el `state`.
-   - Intercambia el `code` en `/oauth2/token`.
-   - Valida el `id_token` usando JWKS.
-   - Crea sesión local (`miniapp_session`) y redirige a `/protected.html`.
-5. `/auth-check` verifica la cookie en cada request protegida.
+## Endpoints
 
-### 7. Próximos pasos
+### Públicos (sin autenticación)
 
-- Persistir sesiones en Redis/memcached en lugar de memoria.
-- Usar HTTPS (requerido para `secure cookies` en producción).
-- Añadir refresco de tokens con `refresh_token` si fuera necesario.
+- `GET /` - Página principal con botón de login
+- `GET /login` - Inicia el flujo OIDC, redirige a WSO2
+- `GET /callback` - Recibe el authorization code de WSO2
+- `GET /logout` - Inicia el logout front-channel con WSO2
+- `GET /logout/callback` - Callback después del logout de WSO2
+- `GET /health` - Health check endpoint
 
+### Protegidos (requieren autenticación)
+
+- `GET /me` - Obtiene información del usuario autenticado
+- `GET /protected.html` - Página protegida de ejemplo
+- `GET /auth-check` - Verifica si hay una sesión válida (devuelve 200 o 401)
+
+## Flujo de Autenticación
+
+1. **Usuario accede a `/login`**
+   - La aplicación genera `state` y `nonce` aleatorios
+   - Guarda estos valores en una cookie firmada (`oidc_flow`)
+   - Redirige al usuario a WSO2 con los parámetros OAuth2
+
+2. **Usuario se autentica en WSO2**
+   - WSO2 valida las credenciales
+   - Redirige de vuelta a `/callback` con un `code` de autorización
+
+3. **Aplicación procesa el callback (`/callback`)**
+   - Valida el `state` contra la cookie guardada
+   - Intercambia el `code` por tokens en `/oauth2/token` de WSO2
+   - Valida el `id_token` usando JWKS remoto
+   - Extrae información del usuario del `id_token`
+   - Crea una sesión local y guarda el ID en cookie firmada (`miniapp_session`)
+   - Redirige al usuario a `/protected.html`
+
+4. **Sesión activa**
+   - Las cookies `miniapp_session` se envían automáticamente en cada request
+   - El middleware `requireAuth` verifica la sesión antes de permitir acceso a rutas protegidas
+
+5. **Logout**
+   - Usuario accede a `/logout`
+   - La aplicación destruye la sesión local
+   - Redirige a WSO2 `/oidc/logout` con `id_token_hint`
+   - WSO2 cierra la sesión SSO
+   - WSO2 redirige de vuelta a `/logout/callback`
+   - La aplicación redirige al usuario a `/`
+
+## Estructura del Proyecto
+
+```
+.
+├── src/
+│   ├── config.ts          # Configuración y variables de entorno
+│   ├── oidcClient.ts      # Cliente OIDC (buildAuthorizeUrl, exchangeCodeForTokens, verifyIdToken)
+│   ├── server.ts          # Servidor Express con todos los endpoints
+│   └── sessionStore.ts   # Almacenamiento de sesiones en memoria
+├── public/
+│   ├── index.html         # Página principal
+│   └── protected.html      # Página protegida de ejemplo
+├── .env                   # Variables de entorno (no versionar)
+├── env.sample             # Plantilla de variables de entorno
+├── package.json
+└── tsconfig.json
+```
+
+## Solución de Problemas
+
+### Error: "self-signed certificate"
+
+**Problema:** WSO2 usa certificados SSL autofirmados.
+
+**Solución:** Configura `ALLOW_INSECURE_TLS=true` en `.env` (solo para desarrollo).
+
+### Error: "nbf claim timestamp check failed"
+
+**Problema:** Desfase horario entre tu servidor y WSO2.
+
+**Solución:** Aumenta `CLOCK_TOLERANCE_SECONDS` en `.env` (por defecto 300 segundos).
+
+### Error: "unexpected iss claim value"
+
+**Problema:** El issuer del ID Token no coincide.
+
+**Solución:** El código ahora extrae automáticamente el issuer del token. Si persiste, verifica que `WSO2_BASE_URL` sea correcto.
+
+### Error: "Registered callback does not match"
+
+**Problema:** La Callback URL en WSO2 no coincide exactamente con `APP_BASE_URL/callback`.
+
+**Solución:** Asegúrate de que:
+- `APP_BASE_URL` en `.env` coincida exactamente con la URL registrada en WSO2
+- No haya diferencias en protocolo (http vs https)
+- No haya diferencias en puerto
+- No haya trailing slashes
+
+### La sesión no persiste
+
+**Problema:** Las cookies no se están guardando.
+
+**Solución:**
+- Verifica que `SESSION_SECRET` esté configurado
+- En desarrollo, asegúrate de usar `http://` (no `https://`) si no tienes SSL
+- Verifica que el navegador permita cookies
+
+## Próximos Pasos
+
+- Persistir sesiones en Redis o base de datos en lugar de memoria
+- Implementar refresh token para renovar sesiones sin re-login
+- Agregar más endpoints protegidos según tus necesidades
+- Configurar HTTPS para producción
+- Agregar logging y monitoreo
+
+## Licencia
+
+ISC
