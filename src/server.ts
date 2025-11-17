@@ -8,6 +8,7 @@ import {
   exchangeCodeForTokens,
   verifyIdToken,
 } from './oidcClient';
+import { getMenderClient } from './menderClient';
 import crypto from 'node:crypto';
 
 const app = express();
@@ -136,6 +137,77 @@ app.get('/me', requireAuth, (req, res) => {
     email: session.email,
     name: session.name,
   });
+});
+
+// Endpoints de Mender
+app.get('/api/mender/devices', requireAuth, async (_req, res) => {
+  const menderClient = getMenderClient();
+  if (!menderClient) {
+    return res.status(503).json({ 
+      error: 'Mender no disponible',
+      message: 'Mender no está configurado o no está disponible'
+    });
+  }
+
+  try {
+    const devices = await menderClient.listDevices();
+    res.json({ devices });
+  } catch (error) {
+    console.error('Error obteniendo dispositivos de Mender:', error);
+    res.status(500).json({ 
+      error: 'Error obteniendo dispositivos',
+      message: 'No se pudieron obtener los dispositivos de Mender'
+    });
+  }
+});
+
+app.get('/api/mender/devices/:deviceId', requireAuth, async (req, res) => {
+  const menderClient = getMenderClient();
+  if (!menderClient) {
+    return res.status(503).json({ 
+      error: 'Mender no disponible',
+      message: 'Mender no está configurado o no está disponible'
+    });
+  }
+
+  const { deviceId } = req.params;
+  try {
+    const deviceStatus = await menderClient.checkDeviceStatus(deviceId);
+    res.json(deviceStatus);
+  } catch (error) {
+    console.error(`Error verificando dispositivo ${deviceId}:`, error);
+    res.status(500).json({ 
+      error: 'Error verificando dispositivo',
+      message: `No se pudo verificar el estado del dispositivo ${deviceId}`
+    });
+  }
+});
+
+app.get('/api/mender/health', requireAuth, async (_req, res) => {
+  const menderClient = getMenderClient();
+  if (!menderClient) {
+    return res.status(503).json({ 
+      enabled: false,
+      healthy: false,
+      message: 'Mender no está configurado'
+    });
+  }
+
+  try {
+    const healthy = await menderClient.checkServerHealth();
+    res.json({
+      enabled: true,
+      healthy,
+      serverUrl: config.mender.serverUrl,
+    });
+  } catch (error) {
+    console.error('Error verificando salud de Mender:', error);
+    res.status(500).json({
+      enabled: true,
+      healthy: false,
+      error: 'Error verificando servidor Mender',
+    });
+  }
 });
 
 app.get('/protected.html', requireAuth, (_req, res) => {

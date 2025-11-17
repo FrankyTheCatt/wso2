@@ -26,6 +26,7 @@ if (allowInsecureTls) {
 }
 
 const wso2BaseUrl = required('WSO2_BASE_URL').replace(/\/$/, '');
+const menderBaseUrl = process.env.MENDER_SERVER_URL?.replace(/\/$/, '') ?? '';
 
 export const config = {
   port: Number(process.env.PORT ?? 3000),
@@ -43,6 +44,11 @@ export const config = {
     clientId: required('WSO2_CLIENT_ID'),
     clientSecret: required('WSO2_CLIENT_SECRET'),
     tenantDomain: process.env.WSO2_TENANT_DOMAIN ?? 'carbon.super',
+  },
+  mender: {
+    serverUrl: menderBaseUrl,
+    apiToken: process.env.MENDER_API_TOKEN ?? '',
+    enabled: !!menderBaseUrl && !!process.env.MENDER_API_TOKEN,
   },
 };
 

@@ -158,6 +158,167 @@
         .back-link:hover {
             color: #764ba2;
         }
+
+        .mender-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
+
+        .mender-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-badge.healthy {
+            background: #28a745;
+            color: white;
+        }
+
+        .status-badge.unhealthy {
+            background: #dc3545;
+            color: white;
+        }
+
+        .status-badge.disabled {
+            background: #6c757d;
+            color: white;
+        }
+
+        .devices-list {
+            margin-top: 20px;
+        }
+
+        .device-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .device-id {
+            font-weight: 600;
+            color: #333;
+            font-family: monospace;
+        }
+
+        .device-status {
+            font-size: 0.9em;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        .device-attributes {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .device-attribute {
+            margin: 5px 0;
+        }
+
+        .device-details {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 0.9em;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #555;
+            min-width: 150px;
+        }
+
+        .detail-value {
+            color: #333;
+            text-align: right;
+            flex: 1;
+        }
+
+        .health-reason {
+            background: #fff3cd;
+            border-left: 3px solid #ffc107;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            color: #856404;
+        }
+
+        .attributes-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .attributes-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .attribute-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.85em;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .attribute-name {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .attribute-value {
+            color: #333;
+            font-family: monospace;
+        }
+
+        .refresh-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
@@ -203,25 +364,8 @@
 
                 const userData = await response.json();
                 
-                contentEl.innerHTML = `
-                    <div class="success-badge">✓ Sesión activa</div>
-                    <div class="user-info">
-                        <h2>👤 Información del Usuario</h2>
-                        <div class="info-item">
-                            <span class="info-label">ID:</span>
-                            <span class="info-value">${userData.sub || 'N/A'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Nombre:</span>
-                            <span class="info-value">${userData.name || 'No disponible'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Email:</span>
-                            <span class="info-value">${userData.email || 'No disponible'}</span>
-                        </div>
-                    </div>
-                    <a href="/" class="back-link">← Volver al inicio</a>
-                `;
+                // Cargar información de Mender
+                await loadMenderInfo(userData);
             } catch (error) {
                 console.error('Error:', error);
                 contentEl.innerHTML = `
@@ -232,6 +376,170 @@
                     </div>
                 `;
             }
+        }
+
+        async function loadMenderInfo(userData) {
+            const contentEl = document.getElementById('content');
+            
+            let menderHtml = `
+                <div class="success-badge">✓ Sesión activa</div>
+                <div class="user-info">
+                    <h2>👤 Información del Usuario</h2>
+                    <div class="info-item">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value">${userData.sub || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Nombre:</span>
+                        <span class="info-value">${userData.name || 'No disponible'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">${userData.email || 'No disponible'}</span>
+                    </div>
+                </div>
+            `;
+
+            // Intentar cargar información de Mender
+            try {
+                const menderHealthResponse = await fetch('/api/mender/health');
+                if (menderHealthResponse.ok) {
+                    const menderHealth = await menderHealthResponse.json();
+                    
+                    if (menderHealth.enabled) {
+                        menderHtml += `
+                            <div class="mender-section">
+                                <h2>🔧 Mender Device Management</h2>
+                                <div>
+                                    <strong>Estado del Servidor:</strong>
+                                    <span class="status-badge ${menderHealth.healthy ? 'healthy' : 'unhealthy'}">
+                                        ${menderHealth.healthy ? '✓ Operativo' : '✗ No disponible'}
+                                    </span>
+                                </div>
+                        `;
+
+                        if (menderHealth.healthy) {
+                            try {
+                                const devicesResponse = await fetch('/api/mender/devices');
+                                if (devicesResponse.ok) {
+                                    const devicesData = await devicesResponse.json();
+                                    const devices = devicesData.devices || [];
+                                    
+                                    if (devices.length > 0) {
+                                        menderHtml += `
+                                            <div class="devices-list">
+                                                <h3 style="margin-top: 20px; margin-bottom: 15px;">Dispositivos (${devices.length})</h3>
+                                        `;
+
+                                        // Verificar estado de cada dispositivo
+                                        for (const device of devices.slice(0, 10)) { // Limitar a 10 dispositivos
+                                            try {
+                                                const deviceStatusResponse = await fetch(`/api/mender/devices/${device.id}`);
+                                                if (deviceStatusResponse.ok) {
+                                                    const deviceStatus = await deviceStatusResponse.json();
+                                                    const statusClass = deviceStatus.healthy ? 'healthy' : 'unhealthy';
+                                                    const statusText = deviceStatus.healthy ? 'Saludable' : 'No saludable';
+                                                    
+                                                    // Traducir estado
+                                                    const statusTranslations = {
+                                                        'accepted': 'Aceptado',
+                                                        'pending': 'Pendiente',
+                                                        'rejected': 'Rechazado',
+                                                        'preauthorized': 'Preautorizado',
+                                                        'not_found': 'No encontrado',
+                                                        'error': 'Error'
+                                                    };
+                                                    const statusTranslated = statusTranslations[deviceStatus.status] || deviceStatus.status;
+                                                    
+                                                    menderHtml += `
+                                                        <div class="device-card">
+                                                            <div class="device-header">
+                                                                <span class="device-id">${device.id}</span>
+                                                                <span class="status-badge ${statusClass}">${statusText}</span>
+                                                            </div>
+                                                            
+                                                            <div class="device-details">
+                                                                <div class="detail-row">
+                                                                    <span class="detail-label">Estado:</span>
+                                                                    <span class="detail-value"><strong>${statusTranslated}</strong></span>
+                                                                </div>
+                                                                ${deviceStatus.created ? `
+                                                                <div class="detail-row">
+                                                                    <span class="detail-label">Creado:</span>
+                                                                    <span class="detail-value">${new Date(deviceStatus.created).toLocaleString()}</span>
+                                                                </div>
+                                                                ` : ''}
+                                                                ${deviceStatus.lastSeen ? `
+                                                                <div class="detail-row">
+                                                                    <span class="detail-label">Última actualización:</span>
+                                                                    <span class="detail-value">${new Date(deviceStatus.lastSeen).toLocaleString()}</span>
+                                                                </div>
+                                                                ` : ''}
+                                                                ${deviceStatus.timeSinceUpdateFormatted ? `
+                                                                <div class="detail-row">
+                                                                    <span class="detail-label">Tiempo desde actualización:</span>
+                                                                    <span class="detail-value">${deviceStatus.timeSinceUpdateFormatted}</span>
+                                                                </div>
+                                                                ` : ''}
+                                                            </div>
+                                                            
+                                                            ${deviceStatus.healthReason ? `
+                                                            <div class="health-reason">
+                                                                <strong>⚠️ Razón de no saludable:</strong><br>
+                                                                ${deviceStatus.healthReason}
+                                                            </div>
+                                                            ` : ''}
+                                                            
+                                                            ${deviceStatus.attributes && Object.keys(deviceStatus.attributes).length > 0 ? `
+                                                            <div class="attributes-section">
+                                                                <div class="attributes-title">📋 Atributos del dispositivo:</div>
+                                                                ${Object.entries(deviceStatus.attributes).map(([key, value]) => `
+                                                                    <div class="attribute-item">
+                                                                        <span class="attribute-name">${key}:</span>
+                                                                        <span class="attribute-value">${value}</span>
+                                                                    </div>
+                                                                `).join('')}
+                                                            </div>
+                                                            ` : ''}
+                                                        </div>
+                                                    `;
+                                                }
+                                            } catch (err) {
+                                                console.error(`Error obteniendo estado del dispositivo ${device.id}:`, err);
+                                            }
+                                        }
+
+                                        menderHtml += `</div>`;
+                                    } else {
+                                        menderHtml += `<p style="margin-top: 15px; color: #666;">No hay dispositivos registrados.</p>`;
+                                    }
+                                }
+                            } catch (err) {
+                                console.error('Error obteniendo dispositivos:', err);
+                                menderHtml += `<p style="margin-top: 15px; color: #dc3545;">Error al obtener dispositivos: ${err.message}</p>`;
+                            }
+                        }
+
+                        menderHtml += `
+                                <button class="refresh-button" onclick="location.reload()">🔄 Actualizar</button>
+                            </div>
+                        `;
+                    } else {
+                        menderHtml += `
+                            <div class="mender-section">
+                                <h2>🔧 Mender Device Management</h2>
+                                <p style="color: #666;">Mender no está configurado. Configura MENDER_SERVER_URL y MENDER_API_TOKEN para habilitarlo.</p>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (err) {
+                console.error('Error verificando estado de Mender:', err);
+                // Continuar sin mostrar información de Mender si hay error
+            }
+
+            menderHtml += `<a href="/" class="back-link">← Volver al inicio</a>`;
+            contentEl.innerHTML = menderHtml;
         }
 
         // Cargar información al cargar la página

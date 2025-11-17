@@ -218,6 +218,36 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 - En desarrollo, asegúrate de usar `http://` (no `https://`) si no tienes SSL
 - Verifica que el navegador permita cookies
 
+## Integración con Mender.io
+
+Esta aplicación incluye integración opcional con Mender.io para gestión de dispositivos IoT.
+
+### Configuración de Mender.io Online
+
+1. **Obtener Token de API**:
+   - Inicia sesión en [https://hosted.mender.io](https://hosted.mender.io)
+   - Ve a **Settings** → **API Tokens**
+   - Crea un nuevo token con permisos `devices:read`
+   - Copia el token generado
+
+2. **Configurar Variables de Entorno**:
+   ```env
+   MENDER_SERVER_URL=https://hosted.mender.io
+   MENDER_API_TOKEN=tu_token_aqui
+   ```
+
+3. **Verificar Integración**:
+   - Accede a `/protected.html` después de autenticarte
+   - Deberías ver la sección de Mender con tus dispositivos
+
+Para más detalles, consulta [MENDER_SETUP.md](./MENDER_SETUP.md)
+
+### Endpoints de Mender (requieren autenticación)
+
+- `GET /api/mender/health` - Estado del servidor Mender
+- `GET /api/mender/devices` - Lista todos los dispositivos
+- `GET /api/mender/devices/:deviceId` - Información de un dispositivo
+
 ## Próximos Pasos
 
 - Persistir sesiones en Redis o base de datos en lugar de memoria
