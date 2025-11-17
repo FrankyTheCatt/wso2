@@ -1,0 +1,15 @@
+# Dockerfile para Nginx con módulo auth_request
+FROM nginx:1.29-alpine
+
+# Copiar la configuración personalizada
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Crear directorio para logs (opcional, pero útil)
+RUN mkdir -p /var/log/nginx
+
+# Exponer el puerto 80
+EXPOSE 80
+
+# Nginx ya tiene el comando por defecto, pero lo especificamos por claridad
+CMD ["nginx", "-g", "daemon off;"]
+

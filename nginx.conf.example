@@ -1,0 +1,146 @@
+# Configuración de ejemplo para Nginx con autenticación OIDC/WSO2
+# 
+# IMPORTANTE: Este archivo requiere que Nginx tenga compilado el módulo
+# ngx_http_auth_request_module. Verifica con: nginx -V 2>&1 | grep -o with-http_auth_request_module
+#
+# Para usar este archivo:
+# 1. Copia este archivo a tu directorio de configuración de Nginx (ej: /etc/nginx/sites-available/)
+# 2. Ajusta las variables según tu entorno (IPs, puertos, dominios)
+# 3. Crea un enlace simbólico: ln -s /etc/nginx/sites-available/tu-app /etc/nginx/sites-enabled/
+# 4. Prueba la configuración: nginx -t
+# 5. Recarga Nginx: systemctl reload nginx
+
+# Upstream para la mini-app (backend Node.js)
+upstream mini_app {
+    server 127.0.0.1:3000;
+    # Si tienes múltiples instancias, puedes agregar más:
+    # server 127.0.0.1:3001;
+    # server 127.0.0.1:3002;
+}
+
+server {
+    listen 80;
+    # Cambia esto por tu dominio o IP pública
+    server_name tu-dominio.com 172.31.112.1;
+
+    # Logs (opcional pero recomendado)
+    access_log /var/log/nginx/mini-app-access.log;
+    error_log /var/log/nginx/mini-app-error.log;
+
+    # Tamaño máximo de body (ajusta según necesites)
+    client_max_body_size 10M;
+
+    # Pasar headers importantes al backend
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # ============================================
+    # ENDPOINT INTERNO: auth-check
+    # ============================================
+    # Este endpoint es llamado internamente por Nginx para verificar autenticación
+    # NO debe ser accesible desde fuera (por eso 'internal')
+    location = /auth-check {
+        internal;
+        proxy_pass http://mini_app/auth-check;
+        
+        # No enviar el body de la petición original (solo necesitamos headers/cookies)
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        
+        # Pasar todas las cookies al backend (importante para la sesión)
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # ============================================
+    # RECURSOS PÚBLICOS (sin autenticación)
+    # ============================================
+    # Archivos estáticos, login, callback, logout, etc.
+    location ~ ^/(login|callback|logout|logout/callback|health|index\.html|\.(css|js|png|jpg|gif|ico|svg))$ {
+        proxy_pass http://mini_app;
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # ============================================
+    # RECURSOS PROTEGIDOS (requieren autenticación)
+    # ============================================
+    # Ejemplo 1: Proteger una ruta específica
+    location /recurso-protegido/ {
+        # Verificar autenticación antes de permitir acceso
+        auth_request /auth-check;
+        
+        # Si auth-check devuelve 401, redirigir al login
+        error_page 401 = @login;
+        
+        # Si está autenticado, pasar la petición al backend
+        proxy_pass http://mini_app;
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # Ejemplo 2: Proteger múltiples rutas con un patrón
+    location ~ ^/(api|admin|dashboard)/ {
+        auth_request /auth-check;
+        error_page 401 = @login;
+        proxy_pass http://mini_app;
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # Ejemplo 3: Proteger todo excepto rutas públicas explícitas
+    # Descomenta esto si quieres proteger TODO por defecto:
+    # location / {
+    #     auth_request /auth-check;
+    #     error_page 401 = @login;
+    #     proxy_pass http://mini_app;
+    #     proxy_set_header Cookie $http_cookie;
+    # }
+
+    # ============================================
+    # HANDLER DE LOGIN (cuando hay 401)
+    # ============================================
+    location @login {
+        # Redirigir al endpoint de login de la mini-app
+        return 302 http://$host/login;
+        # O si prefieres redirigir directamente a WSO2:
+        # return 302 https://tu-wso2-ip:9443/oauth2/authorize?...;
+    }
+
+    # ============================================
+    # CONFIGURACIÓN ADICIONAL (opcional)
+    # ============================================
+    
+    # Timeouts (ajusta según necesites)
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+
+    # Buffering (mejora rendimiento)
+    proxy_buffering on;
+    proxy_buffer_size 4k;
+    proxy_buffers 8 4k;
+}
+
+# ============================================
+# CONFIGURACIÓN HTTPS (producción)
+# ============================================
+# Descomenta y ajusta esto cuando tengas certificados SSL:
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name tu-dominio.com;
+#
+#     ssl_certificate /path/to/cert.pem;
+#     ssl_certificate_key /path/to/key.pem;
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     ssl_ciphers HIGH:!aNULL:!MD5;
+#
+#     # ... resto de la configuración igual que arriba ...
+# }
+#
+# # Redirigir HTTP a HTTPS
+# server {
+#     listen 80;
+#     server_name tu-dominio.com;
+#     return 301 https://$server_name$request_uri;
+# }
+
