@@ -41,6 +41,7 @@ Esta aplicación implementa un sistema de control de acceso de dos niveles:
 ## Requisitos
 
 - Node.js >= 18
+- Nginx (como proxy reverso)
 - Acceso al portal Carbon de WSO2 Identity Server
 - Credenciales de Service Provider configuradas en WSO2
 
@@ -57,23 +58,19 @@ Esta aplicación implementa un sistema de control de acceso de dos niveles:
 1. Dentro de la aplicación, ve a **Inbound Authentication Configuration** → **OAuth/OpenID Connect Configuration**
 2. En el campo **Callback URL**, configura las URLs de callback:
 
-   **Opción A: URLs separadas por salto de línea:**
+   Configura las URLs de callback:
    ```
-   http://<tu-ip>:3000/callback
-   http://<tu-ip>:3000/logout/callback
-   ```
-
-   **Opción B: Usar expresión regular (recomendado):**
-   ```
-   regexp=(http://<tu-ip>:3000/(callback|logout/callback))
+   http://<tu-ip>/callback
+   http://<tu-ip>/logout/callback
    ```
    
-   O si quieres permitir cualquier puerto:
+   O usando HTTPS:
    ```
-   regexp=(http://<tu-ip>:\d+/(callback|logout/callback))
+   https://<tu-ip>/callback
+   https://<tu-ip>/logout/callback
    ```
 
-   **Nota:** Reemplaza `<tu-ip>` con la IP real donde correrá tu aplicación.
+   **Nota:** Reemplaza `<tu-ip>` con la IP real o dominio donde correrá tu aplicación. Las URLs deben apuntar al puerto 80 (HTTP) o 443 (HTTPS) a través de Nginx.
 
 3. Configura los **Scopes**: `openid profile email`
 4. Guarda y copia el **Client ID** y **Client Secret**
@@ -85,15 +82,155 @@ Esta aplicación implementa un sistema de control de acceso de dos niveles:
 - **PKCE Mandatory**: Opcional (déjalo desmarcado si no lo usas)
 - **Access Token Binding Type**: NONE
 
-## Configuración Local
+## Instalación y Configuración
 
-### 1. Instalar dependencias
+### 1. Instalar dependencias de Node.js
 
 ```bash
 npm install
 ```
 
-### 2. Configurar variables de entorno
+### 2. Instalar y configurar Nginx
+
+#### 2.1. Instalar Nginx
+
+**En Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install nginx
+```
+
+**En CentOS/RHEL:**
+```bash
+sudo yum install nginx
+# o en versiones más recientes:
+sudo dnf install nginx
+```
+
+**Verificar instalación:**
+```bash
+nginx -v
+sudo systemctl status nginx
+```
+
+#### 2.2. Configurar Nginx como Proxy Reverso
+
+Crea un archivo de configuración para la aplicación:
+
+```bash
+sudo nano /etc/nginx/sites-available/taller-2-ciber
+```
+
+**Nota:** En CentOS/RHEL, usa `/etc/nginx/conf.d/taller-2-ciber.conf` en lugar de `sites-available`.
+
+Agrega la siguiente configuración:
+
+```nginx
+server {
+    listen 80;
+    server_name <tu-ip-o-dominio>;
+
+    # Redirigir todo el tráfico HTTP a HTTPS (opcional, recomendado para producción)
+    # return 301 https://$server_name$request_uri;
+
+    # Si no usas HTTPS, descomenta las siguientes líneas y comenta la línea de redirección:
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        
+        # Headers importantes para el funcionamiento correcto
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        
+        # WebSocket support (si es necesario en el futuro)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+
+# Configuración HTTPS (opcional pero recomendado para producción)
+# server {
+#     listen 443 ssl http2;
+#     server_name <tu-ip-o-dominio>;
+#
+#     # Certificados SSL
+#     ssl_certificate /etc/ssl/certs/taller-2-ciber.crt;
+#     ssl_certificate_key /etc/ssl/private/taller-2-ciber.key;
+#
+#     # Configuración SSL moderna
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     ssl_ciphers HIGH:!aNULL:!MD5;
+#     ssl_prefer_server_ciphers on;
+#
+#     location / {
+#         proxy_pass http://localhost:3000;
+#         proxy_http_version 1.1;
+#         
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#         proxy_set_header X-Forwarded-Host $host;
+#         proxy_set_header X-Forwarded-Port $server_port;
+#         
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#         
+#         proxy_connect_timeout 60s;
+#         proxy_send_timeout 60s;
+#         proxy_read_timeout 60s;
+#     }
+# }
+```
+
+**Reemplaza `<tu-ip-o-dominio>`** con tu IP pública o dominio.
+
+#### 2.3. Habilitar la configuración
+
+**En Ubuntu/Debian:**
+```bash
+sudo ln -s /etc/nginx/sites-available/taller-2-ciber /etc/nginx/sites-enabled/
+sudo nginx -t  # Verificar que la configuración sea válida
+sudo systemctl reload nginx
+```
+
+**En CentOS/RHEL:**
+```bash
+sudo nginx -t  # Verificar que la configuración sea válida
+sudo systemctl reload nginx
+```
+
+#### 2.4. Configurar firewall (si es necesario)
+
+```bash
+# Permitir HTTP
+sudo ufw allow 80/tcp
+
+# Permitir HTTPS (si lo usas)
+sudo ufw allow 443/tcp
+
+# Verificar estado
+sudo ufw status
+```
+
+**Nota:** En CentOS/RHEL, usa `firewall-cmd`:
+```bash
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+```
+
+### 3. Configurar variables de entorno
 
 Copia `env.sample` a `.env` y completa los valores:
 
@@ -108,7 +245,12 @@ WSO2_BASE_URL=https://<tu-ip-wso2>:9443
 WSO2_TENANT_DOMAIN=carbon.super
 WSO2_CLIENT_ID=tu_client_id_aqui
 WSO2_CLIENT_SECRET=tu_client_secret_aqui
-APP_BASE_URL=http://<tu-ip>:3000
+
+# URL pública a través de Nginx (sin puerto 3000)
+APP_BASE_URL=http://<tu-ip>
+# O con HTTPS:
+# APP_BASE_URL=https://<tu-ip>
+
 SESSION_SECRET=genera-una-cadena-larga-y-aleatoria-aqui
 SESSION_TTL_MS=3600000
 ALLOW_INSECURE_TLS=true
@@ -124,27 +266,102 @@ MENDER_API_TOKEN=tu_token_de_api_mender_aqui
 - `WSO2_BASE_URL`: URL base de tu servidor WSO2 (ej: `https://172.31.125.215:9443`)
 - `WSO2_TENANT_DOMAIN`: Dominio del tenant (por defecto `carbon.super`)
 - `WSO2_CLIENT_ID` / `WSO2_CLIENT_SECRET`: Credenciales del Service Provider
-- `APP_BASE_URL`: URL donde correrá tu aplicación (debe coincidir con las Callback URLs en WSO2)
+- `APP_BASE_URL`: URL pública a través de Nginx sin puerto (ej: `http://192.168.1.100` o `https://taller2ciber.example.com`)
+  - **IMPORTANTE**: Debe coincidir exactamente con las Callback URLs configuradas en WSO2
+  - No incluyas el puerto 3000, ya que Nginx actúa como proxy reverso
 - `SESSION_SECRET`: Cadena aleatoria para firmar cookies (genera una con: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`)
 - `ALLOW_INSECURE_TLS`: `true` solo para desarrollo con certificados autofirmados
 - `CLOCK_TOLERANCE_SECONDS`: Margen para tolerar desfases horarios (ajusta según tu entorno)
 - `MENDER_SERVER_URL`: URL del servidor Mender.io (opcional, solo si usas Mender)
 - `MENDER_API_TOKEN`: Token de API de Mender.io (opcional, solo si usas Mender)
 
-### 3. Ejecutar la aplicación
+### 4. Ejecutar la aplicación
 
-**Modo desarrollo:**
-```bash
-npm run dev
-```
-
-**Modo producción:**
+1. Compilar la aplicación:
 ```bash
 npm run build
+```
+
+2. Ejecutar la aplicación:
+```bash
 npm start
 ```
 
-La aplicación estará disponible en `http://<tu-ip>:3000`
+3. La aplicación Node.js correrá en `http://localhost:3000` (solo accesible localmente)
+
+4. Nginx actuará como proxy reverso y la aplicación será accesible públicamente en:
+   - `http://<tu-ip>` (puerto 80)
+   - O `https://<tu-ip>` (puerto 443) si configuraste SSL
+
+#### 4.1. Configurar la aplicación como servicio (opcional pero recomendado)
+
+Crea un archivo de servicio systemd para que la aplicación se inicie automáticamente:
+
+```bash
+sudo nano /etc/systemd/system/taller-2-ciber.service
+```
+
+Agrega el siguiente contenido:
+
+```ini
+[Unit]
+Description=Taller 2 Ciber - WSO2 OAuth2/OIDC Application
+After=network.target
+
+[Service]
+Type=simple
+User=tu_usuario
+WorkingDirectory=/ruta/a/tu/proyecto/wso2-master
+Environment="NODE_ENV=production"
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Reemplaza:**
+- `tu_usuario`: Tu usuario del sistema
+- `/ruta/a/tu/proyecto/wso2-master`: Ruta completa a tu proyecto
+
+**Habilitar y iniciar el servicio:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable taller-2-ciber
+sudo systemctl start taller-2-ciber
+sudo systemctl status taller-2-ciber
+```
+
+**Comandos útiles:**
+```bash
+# Ver logs
+sudo journalctl -u taller-2-ciber -f
+
+# Reiniciar servicio
+sudo systemctl restart taller-2-ciber
+
+# Detener servicio
+sudo systemctl stop taller-2-ciber
+```
+
+### 5. Verificar la instalación
+
+1. **Verificar que Node.js esté corriendo:**
+```bash
+curl http://localhost:3000/health
+# Debe devolver: {"status":"ok"}
+```
+
+2. **Verificar que Nginx esté funcionando:**
+```bash
+curl http://<tu-ip>/health
+# Debe devolver: {"status":"ok"}
+```
+
+3. **Acceder a la aplicación:**
+   - Abre tu navegador y ve a `http://<tu-ip>`
+   - Deberías ver la página de inicio con el botón "Iniciar Sesión"
 
 ## Endpoints
 
@@ -292,6 +509,37 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 - Verifica que `SESSION_SECRET` esté configurado
 - En desarrollo, asegúrate de usar `http://` (no `https://`) si no tienes SSL
 - Verifica que el navegador permita cookies
+- Asegúrate de que los headers `X-Forwarded-Proto` y `X-Forwarded-Host` estén configurados correctamente en Nginx
+
+### Problemas con Nginx
+
+#### Error 502 Bad Gateway
+
+**Problema:** Nginx no puede conectarse a la aplicación Node.js.
+
+**Solución:**
+- Verifica que la aplicación Node.js esté corriendo: `curl http://localhost:3000/health`
+- Verifica que el puerto en la configuración de Nginx sea correcto (debe ser `proxy_pass http://localhost:3000;`)
+- Revisa los logs de Nginx: `sudo tail -f /var/log/nginx/error.log`
+- Verifica que el firewall no esté bloqueando conexiones locales
+
+#### Las cookies no funcionan con Nginx
+
+**Problema:** Las cookies de sesión no se guardan cuando se accede a través de Nginx.
+
+**Solución:**
+- Asegúrate de que `APP_BASE_URL` en `.env` coincida con la URL pública a través de Nginx (sin puerto 3000)
+- Verifica que los headers `X-Forwarded-Proto` y `X-Forwarded-Host` estén configurados en Nginx
+- Si usas HTTPS, asegúrate de que `X-Forwarded-Proto` sea `https`
+
+#### Nginx redirige a localhost:3000
+
+**Problema:** Al acceder a la aplicación, el navegador redirige a `localhost:3000`.
+
+**Solución:**
+- Verifica que `APP_BASE_URL` en `.env` use la URL pública (no `localhost`)
+- Asegúrate de que los headers `X-Forwarded-Host` y `X-Forwarded-Proto` estén configurados en Nginx
+- Reinicia la aplicación Node.js después de cambiar `APP_BASE_URL`
 
 ## Integración con Mender.io
 
