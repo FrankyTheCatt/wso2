@@ -1,7 +1,7 @@
 {
   "name": "nginx",
   "version": "1.0.0",
-  "description": "Mini webapp con flujo OAuth2/OIDC contra WSO2 y protegido por Nginx.",
+  "description": "Taller 2 Ciber - Aplicación web con flujo OAuth2/OIDC contra WSO2 y control de acceso basado en salud de dispositivos Mender.",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",

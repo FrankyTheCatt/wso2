@@ -140,12 +140,14 @@ export class MenderClient {
 
       // En Mender.io online, el status puede estar en los atributos o en el nivel superior
       const deviceStatus = device.status || attributes.status || 'unknown';
+      console.log(`[checkDeviceStatus] Dispositivo ${device.id}: device.status=${device.status}, attributes.status=${attributes.status}, deviceStatus final=${deviceStatus}`);
       
       // También extraer created_ts y updated_ts de atributos si no están en el nivel superior
       const createdTs = device.created_ts || attributes.created_ts;
       const updatedTs = device.updated_ts || attributes.updated_ts;
 
       if (!updatedTs) {
+        console.log(`[checkDeviceStatus] Dispositivo ${device.id}: No se pudo determinar updatedTs`);
         return {
           deviceId: device.id,
           status: deviceStatus,
@@ -166,6 +168,8 @@ export class MenderClient {
       const isAccepted = deviceStatus === 'accepted';
       const recentlyUpdated = timeSinceUpdate < 24 * 60 * 60 * 1000; // Últimas 24 horas
       const healthy = isAccepted && recentlyUpdated;
+      
+      console.log(`[checkDeviceStatus] Dispositivo ${device.id}: isAccepted=${isAccepted}, recentlyUpdated=${recentlyUpdated}, healthy=${healthy}`);
 
       // Determinar razón de no saludable
       let healthReason: string | undefined;

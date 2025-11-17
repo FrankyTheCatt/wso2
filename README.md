@@ -1,18 +1,42 @@
-# Mini-App WSO2 OAuth2/OIDC
+# Taller 2 Ciber - WSO2 OAuth2/OIDC con Control de Acceso Basado en Salud de Dispositivos
 
-Implementación de referencia (Node.js + TypeScript + Express) que demuestra cómo integrar autenticación OAuth2/OIDC con WSO2 Identity Server.
+Aplicación web completa que integra autenticación OAuth2/OIDC con WSO2 Identity Server y control de acceso basado en el estado de salud de dispositivos IoT gestionados por Mender.io.
 
-## Características
+## ¿Qué hace esta aplicación?
 
+Esta aplicación implementa un sistema de control de acceso de dos niveles:
+
+1. **Autenticación con WSO2**: Los usuarios deben autenticarse primero con WSO2 Identity Server usando OAuth2/OIDC antes de acceder a cualquier recurso protegido.
+
+2. **Verificación de Salud de Dispositivos**: Una vez autenticado, antes de permitir el acceso a las páginas protegidas, la aplicación verifica automáticamente el estado de salud de todos los dispositivos IoT registrados en Mender.io. Solo si todos los dispositivos están saludables (aceptados y actualizados recientemente), se permite el acceso al Dashboard y otras páginas protegidas.
+
+3. **Bloqueo de Acceso**: Si algún dispositivo no está saludable (rechazado, pendiente, o sin actualizar), la aplicación bloquea el acceso y muestra una página de error con detalles de los dispositivos rechazados en un formato de menú contraíble.
+
+## Características Principales
+
+### Autenticación y Seguridad
 - ✅ Autenticación OAuth2/OIDC con WSO2 Identity Server
 - ✅ Intercambio seguro de authorization code por tokens
-- ✅ Validación de ID Token usando JWKS
-- ✅ Gestión de sesiones locales con cookies firmadas
-- ✅ Logout front-channel con WSO2
+- ✅ Validación de ID Token usando JWKS (JSON Web Key Set)
+- ✅ Gestión de sesiones locales con cookies firmadas y seguras
+- ✅ Logout front-channel con WSO2 para cerrar sesión SSO
 - ✅ Endpoints protegidos con middleware de autenticación
-- ✅ Integración con Mender.io para gestión de dispositivos IoT
+- ✅ Redirección automática cuando se accede sin sesión activa
+
+### Control de Acceso Basado en Salud de Dispositivos
+- ✅ Verificación automática del estado de salud de dispositivos antes de permitir acceso
+- ✅ Bloqueo de acceso cuando hay dispositivos no saludables
+- ✅ Página de error informativa con detalles de dispositivos rechazados
+- ✅ Menú contraíble (acordeón) para visualizar detalles de cada dispositivo
+- ✅ Actualización en tiempo real del estado de dispositivos
+
+### Integración con Mender.io
+- ✅ Conexión con Mender.io online (hosted.mender.io)
+- ✅ Visualización de dispositivos gestionados
+- ✅ Verificación del estado de salud de cada dispositivo
+- ✅ Información detallada de dispositivos (atributos, estado, última actualización)
+- ✅ Diagnóstico de problemas (razones de no saludable)
 - ✅ Múltiples páginas protegidas con navegación integrada
-- ✅ Redirección automática cuando se accede sin sesión
 
 ## Requisitos
 
@@ -26,7 +50,7 @@ Implementación de referencia (Node.js + TypeScript + Express) que demuestra có
 
 1. Accede al portal Carbon: `https://<tu-ip>:9443/carbon`
 2. Ve a **Service Providers** → **Add**
-3. Define un nombre para tu aplicación (ej: `mini-app-wso2`)
+3. Define un nombre para tu aplicación (ej: `taller-2-ciber-wso2`)
 
 ### 2. Configurar OAuth2/OIDC
 
@@ -143,30 +167,60 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 - `GET /settings.html` - Configuración del sistema
 - `GET /auth-check` - Verifica si hay una sesión válida (devuelve 200 o 401)
 
-## Flujo de Autenticación
+## Flujo de Autenticación y Control de Acceso
+
+### 1. Autenticación Inicial
 
 1. **Usuario accede a `/login`**
-   - La aplicación genera `state` y `nonce` aleatorios
+   - La aplicación genera `state` y `nonce` aleatorios para seguridad
    - Guarda estos valores en una cookie firmada (`oidc_flow`)
    - Redirige al usuario a WSO2 con los parámetros OAuth2
 
 2. **Usuario se autentica en WSO2**
-   - WSO2 valida las credenciales
+   - WSO2 valida las credenciales del usuario
    - Redirige de vuelta a `/callback` con un `code` de autorización
 
 3. **Aplicación procesa el callback (`/callback`)**
-   - Valida el `state` contra la cookie guardada
+   - Valida el `state` contra la cookie guardada para prevenir ataques CSRF
    - Intercambia el `code` por tokens en `/oauth2/token` de WSO2
-   - Valida el `id_token` usando JWKS remoto
-   - Extrae información del usuario del `id_token`
-   - Crea una sesión local y guarda el ID en cookie firmada (`miniapp_session`)
+   - Valida el `id_token` usando JWKS remoto para verificar la firma
+   - Extrae información del usuario del `id_token` (sub, email, name)
+   - Crea una sesión local y guarda el ID en cookie firmada (`taller2ciber_session`)
    - Redirige al usuario a `/protected.html`
 
-4. **Sesión activa**
-   - Las cookies `miniapp_session` se envían automáticamente en cada request
-   - El middleware `requireAuth` verifica la sesión antes de permitir acceso a rutas protegidas
+### 2. Verificación de Salud de Dispositivos
 
-5. **Logout**
+4. **Acceso a páginas protegidas**
+   - Cuando el usuario intenta acceder a cualquier página protegida (`/protected.html`, `/dashboard.html`, `/devices.html`, etc.)
+   - El middleware `requireAuth` verifica primero que haya una sesión válida
+   - Luego, el middleware `requireHealthyDevices` ejecuta automáticamente:
+     - Obtiene todos los dispositivos registrados en Mender.io
+     - Verifica el estado de salud de cada dispositivo:
+       - Estado debe ser `accepted` (aceptado)
+       - Última actualización debe ser hace menos de 24 horas
+     - Si **todos** los dispositivos están saludables → permite el acceso
+     - Si **algún** dispositivo no está saludable → bloquea el acceso y muestra página de error
+
+5. **Página de Error por Dispositivos Rechazados**
+   - Muestra el mensaje "Dispositivo Rechazado"
+   - Lista todos los dispositivos no saludables en un menú contraíble
+   - Cada dispositivo muestra:
+     - ID del dispositivo
+     - Estado actual (pending, rejected, etc.)
+     - Última actualización y tiempo transcurrido
+     - Razón específica por la que no está saludable
+     - Atributos completos del dispositivo
+   - Botón para actualizar el estado y verificar nuevamente
+   - Botón para volver al inicio
+
+### 3. Sesión Activa y Logout
+
+6. **Sesión activa**
+   - Las cookies `taller2ciber_session` se envían automáticamente en cada request
+   - El middleware `requireAuth` verifica la sesión antes de permitir acceso
+   - El middleware `requireHealthyDevices` verifica la salud de dispositivos en cada acceso
+
+7. **Logout**
    - Usuario accede a `/logout`
    - La aplicación destruye la sesión local
    - Redirige a WSO2 `/oidc/logout` con `id_token_hint`
@@ -185,13 +239,14 @@ La aplicación estará disponible en `http://<tu-ip>:3000`
 │   ├── server.ts          # Servidor Express con todos los endpoints
 │   └── sessionStore.ts   # Almacenamiento de sesiones en memoria
 ├── public/
-│   ├── index.html         # Página principal
-│   ├── protected.html     # Página protegida principal
-│   ├── dashboard.html     # Dashboard del sistema
-│   ├── devices.html        # Gestión de dispositivos Mender
-│   ├── profile.html       # Perfil de usuario
-│   ├── settings.html      # Configuración del sistema
-│   └── common.css          # Estilos comunes para páginas protegidas
+│   ├── index.html              # Página principal con botón de login
+│   ├── protected.html          # Página protegida principal
+│   ├── dashboard.html          # Dashboard del sistema
+│   ├── devices.html            # Gestión de dispositivos Mender
+│   ├── profile.html            # Perfil de usuario
+│   ├── settings.html           # Configuración del sistema
+│   ├── device-unhealthy.html   # Página de error cuando hay dispositivos rechazados
+│   └── common.css              # Estilos comunes para páginas protegidas
 ├── .env                   # Variables de entorno (no versionar)
 ├── env.sample             # Plantilla de variables de entorno
 ├── MENDER_SETUP.md        # Guía detallada de configuración de Mender
@@ -258,7 +313,7 @@ Esta aplicación incluye integración opcional con Mender.io para gestión de di
 1. Inicia sesión en [https://hosted.mender.io](https://hosted.mender.io)
 2. Ve a **Settings** → **API Tokens**
 3. Haz clic en **Create API Token**
-4. Asigna un nombre descriptivo (ej: "Mini-App Integration")
+4. Asigna un nombre descriptivo (ej: "Taller 2 Ciber Integration")
 5. Selecciona los permisos necesarios:
    - `devices:read` - Para leer información de dispositivos (requerido)
    - `devices:write` - Si necesitas modificar dispositivos (opcional)
@@ -304,21 +359,81 @@ MENDER_API_TOKEN=tu_token_aqui_pegado_del_paso_anterior
   
 - `GET /api/mender/devices/:deviceId` - Información detallada de un dispositivo
   - Devuelve: `{ deviceId, status, healthy, lastSeen, created, attributes, healthReason, timeSinceUpdateFormatted }`
+  
+- `GET /api/mender/unhealthy-devices` - Lista de dispositivos no saludables
+  - Devuelve: `{ unhealthyDevices: MenderDeviceStatus[] }`
+  - Usado por la página de error para mostrar dispositivos rechazados
 
-### Criterios de Salud de Dispositivos
+### Control de Acceso Basado en Salud de Dispositivos
 
-Un dispositivo se considera **saludable** cuando:
+La aplicación implementa un sistema de control de acceso de dos niveles que garantiza que solo usuarios autenticados con dispositivos saludables puedan acceder a las páginas protegidas.
+
+#### Criterios de Salud de Dispositivos
+
+Un dispositivo se considera **saludable** cuando cumple **ambas** condiciones:
 - ✅ Estado es `accepted` (aceptado en Mender)
 - ✅ Última actualización fue hace menos de 24 horas
 
-Si un dispositivo no cumple estos criterios, se muestra como **no saludable** con la razón específica.
+Si un dispositivo no cumple alguno de estos criterios, se marca como **no saludable** y se bloquea el acceso.
+
+#### Proceso de Verificación
+
+1. **Usuario autenticado intenta acceder a página protegida**
+   - El middleware `requireAuth` verifica la sesión
+   - Si no hay sesión → redirige a página principal con error
+
+2. **Verificación de salud de dispositivos**
+   - El middleware `requireHealthyDevices` se ejecuta automáticamente
+   - Obtiene todos los dispositivos de Mender.io
+   - Verifica el estado de cada dispositivo:
+     - Si no hay dispositivos → permite acceso
+     - Si todos están saludables → permite acceso
+     - Si alguno no está saludable → bloquea acceso
+
+3. **Bloqueo de acceso**
+   - Muestra la página `device-unhealthy.html`
+   - Título: "Dispositivo Rechazado"
+   - Lista de dispositivos no saludables en formato de acordeón
+   - Cada dispositivo se puede expandir para ver detalles completos
+
+#### Página de Error: Dispositivo Rechazado
+
+Cuando hay dispositivos no saludables, se muestra una página especial que incluye:
+
+- **Mensaje claro**: "Dispositivo Rechazado" con explicación
+- **Menú contraíble**: Cada dispositivo aparece en un acordeón que se puede expandir/contraer
+- **Información detallada** (al expandir):
+  - ID del dispositivo
+  - Estado actual (pending, rejected, etc.)
+  - Fecha y hora de última actualización
+  - Tiempo transcurrido desde la última actualización
+  - Fecha de creación
+  - Razón específica por la que no está saludable
+  - Todos los atributos del dispositivo
+- **Acciones disponibles**:
+  - Botón "Actualizar Estado" para verificar nuevamente
+  - Botón "Volver al Inicio" para regresar
+
+#### Comportamiento del Sistema
+
+- **Si Mender no está configurado**: El sistema permite el acceso normalmente (Mender es opcional)
+- **Si hay error al verificar dispositivos**: Por seguridad, bloquea el acceso y muestra la página de error
+- **Solo para páginas HTML**: La verificación se aplica solo a páginas protegidas, no a endpoints API
 
 ### Páginas Relacionadas con Mender
 
-- **`/protected.html`** - Muestra información básica de Mender y dispositivos
+- **`/protected.html`** - Página principal protegida que muestra información básica de Mender y dispositivos
+- **`/dashboard.html`** - Dashboard con resumen del sistema y dispositivos
 - **`/devices.html`** - Página completa de gestión de dispositivos con información detallada
-- **`/dashboard.html`** - Dashboard con resumen de dispositivos
-- **`/settings.html`** - Estado de configuración de Mender
+- **`/profile.html`** - Perfil del usuario autenticado
+- **`/settings.html`** - Configuración del sistema y estado de servicios (WSO2, Mender)
+- **`/device-unhealthy.html`** - Página de error que se muestra cuando hay dispositivos rechazados (acceso bloqueado)
+
+**Nota importante**: Todas estas páginas requieren:
+1. Autenticación válida con WSO2
+2. Que todos los dispositivos estén saludables
+
+Si alguna condición no se cumple, el acceso será bloqueado automáticamente.
 
 ### Solución de Problemas con Mender
 
@@ -355,4 +470,17 @@ Si un dispositivo no cumple estos criterios, se muestra como **no saludable** co
 - Verifica en el dashboard de Mender.io que tengas dispositivos registrados
 - Asegúrate de que el token tenga permisos para leer dispositivos
 - Verifica que los dispositivos estén en estado "accepted"
+
+#### El acceso está bloqueado aunque estoy autenticado
+
+**Problema**: Hay dispositivos no saludables que están bloqueando el acceso.
+
+**Solución**:
+- Revisa la página de error que se muestra ("Dispositivo Rechazado")
+- Expande cada dispositivo en el menú contraíble para ver los detalles
+- Verifica la razón específica por la que cada dispositivo no está saludable
+- Corrige los problemas en Mender.io:
+  - Acepta dispositivos que estén en estado "pending"
+  - Asegúrate de que los dispositivos se actualicen regularmente (menos de 24 horas)
+- Usa el botón "Actualizar Estado" para verificar nuevamente después de corregir los problemas
 

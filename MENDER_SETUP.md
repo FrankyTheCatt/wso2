@@ -14,7 +14,7 @@ Esta guía te ayudará a configurar la integración con Mender.io online (hosted
    - Ve a **Settings** (Configuración) en el menú lateral
    - Selecciona **API Tokens** (Tokens de API)
    - Haz clic en **Create API Token** (Crear Token de API)
-   - Asigna un nombre descriptivo (ej: "Mini-App Integration")
+   - Asigna un nombre descriptivo (ej: "Taller 2 Ciber Integration")
    - Selecciona los permisos necesarios:
      - `devices:read` - Para leer información de dispositivos
      - `devices:write` - Si necesitas modificar dispositivos (opcional)

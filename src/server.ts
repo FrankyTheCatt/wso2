@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 const app = express();
 const sessionStore = new InMemorySessionStore(config.sessionTtlMs);
 
-const SESSION_COOKIE = 'miniapp_session';
+const SESSION_COOKIE = 'taller2ciber_session';
 const FLOW_COOKIE = 'oidc_flow';
 const LOGOUT_FLOW_COOKIE = 'logout_flow';
 const isHttps = config.appBaseUrl.startsWith('https://');
@@ -22,7 +22,6 @@ const isHttps = config.appBaseUrl.startsWith('https://');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(config.sessionSecret));
-app.use(express.static(path.join(process.cwd(), 'public')));
 
 const getSessionFromRequest = (req: Request) => {
   const sessionId = req.signedCookies?.[SESSION_COOKIE] ?? req.cookies?.[SESSION_COOKIE];
@@ -42,6 +41,81 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   }
   (req as Request & { session?: typeof session }).session = session;
   return next();
+};
+
+/**
+ * Middleware que verifica que todos los dispositivos de Mender estén saludables
+ * antes de permitir el acceso a páginas protegidas
+ */
+const requireHealthyDevices = async (req: Request, res: Response, next: NextFunction) => {
+  const menderClient = getMenderClient();
+  
+  // Si Mender no está configurado, permitir acceso (no es requerido)
+  if (!menderClient) {
+    console.log('[requireHealthyDevices] Mender no está configurado, permitiendo acceso');
+    return next();
+  }
+
+  // Solo verificar para peticiones HTML (páginas protegidas)
+  const acceptsHtml = req.accepts('html');
+  if (!acceptsHtml) {
+    // Para APIs, permitir acceso sin verificar dispositivos
+    console.log('[requireHealthyDevices] Petición no HTML, permitiendo acceso');
+    return next();
+  }
+
+  try {
+    console.log('[requireHealthyDevices] Verificando salud de dispositivos...');
+    
+    // Obtener todos los dispositivos
+    const devices = await menderClient.listDevices();
+    console.log(`[requireHealthyDevices] Encontrados ${devices?.length || 0} dispositivos`);
+    
+    // Si no hay dispositivos, permitir acceso
+    if (!devices || devices.length === 0) {
+      console.log('[requireHealthyDevices] No hay dispositivos, permitiendo acceso');
+      return next();
+    }
+
+    // Verificar el estado de cada dispositivo
+    const deviceStatuses = await Promise.all(
+      devices.map(device => menderClient.checkDeviceStatus(device.id))
+    );
+
+    // Log del estado de cada dispositivo
+    deviceStatuses.forEach(status => {
+      console.log(`[requireHealthyDevices] Dispositivo ${status.deviceId}: estado=${status.status}, saludable=${status.healthy}`);
+      if (!status.healthy) {
+        console.log(`[requireHealthyDevices] Razón: ${status.healthReason}`);
+      }
+    });
+
+    // Filtrar dispositivos no saludables
+    const unhealthyDevices = deviceStatuses.filter(status => !status.healthy);
+
+    // Si hay dispositivos no saludables, mostrar página de error
+    if (unhealthyDevices.length > 0) {
+      console.log(`[requireHealthyDevices] Bloqueando acceso: ${unhealthyDevices.length} dispositivo(s) no saludable(s)`);
+      // Guardar información de dispositivos no saludables en la sesión para mostrarla en la página
+      (req as any).unhealthyDevices = unhealthyDevices;
+      return res.sendFile(path.join(process.cwd(), 'public', 'device-unhealthy.html'));
+    }
+
+    // Todos los dispositivos están saludables, permitir acceso
+    console.log('[requireHealthyDevices] Todos los dispositivos están saludables, permitiendo acceso');
+    return next();
+  } catch (error) {
+    console.error('[requireHealthyDevices] Error verificando salud de dispositivos:', error);
+    // En caso de error, bloquear acceso para seguridad
+    // Solo permitir acceso si es un error de configuración (Mender no disponible)
+    if (error instanceof Error && error.message.includes('no está habilitado')) {
+      console.log('[requireHealthyDevices] Mender no habilitado, permitiendo acceso');
+      return next();
+    }
+    // Para otros errores, bloquear acceso por seguridad
+    console.error('[requireHealthyDevices] Error crítico, bloqueando acceso por seguridad');
+    return res.status(503).sendFile(path.join(process.cwd(), 'public', 'device-unhealthy.html'));
+  }
 };
 
 app.get('/health', (_req, res) => {
@@ -177,6 +251,13 @@ app.get('/api/mender/devices/:deviceId', requireAuth, async (req, res) => {
   }
 
   const { deviceId } = req.params;
+  if (!deviceId) {
+    return res.status(400).json({ 
+      error: 'ID de dispositivo requerido',
+      message: 'Debe proporcionar un ID de dispositivo'
+    });
+  }
+
   try {
     const deviceStatus = await menderClient.checkDeviceStatus(deviceId);
     res.json(deviceStatus);
@@ -216,25 +297,64 @@ app.get('/api/mender/health', requireAuth, async (_req, res) => {
   }
 });
 
-app.get('/protected.html', requireAuth, (_req, res) => {
+// Endpoint para obtener dispositivos no saludables
+app.get('/api/mender/unhealthy-devices', requireAuth, async (_req, res) => {
+  const menderClient = getMenderClient();
+  if (!menderClient) {
+    return res.status(503).json({ 
+      error: 'Mender no disponible',
+      message: 'Mender no está configurado o no está disponible'
+    });
+  }
+
+  try {
+    const devices = await menderClient.listDevices();
+    
+    if (!devices || devices.length === 0) {
+      return res.json({ unhealthyDevices: [] });
+    }
+
+    // Verificar el estado de cada dispositivo
+    const deviceStatuses = await Promise.all(
+      devices.map(device => menderClient.checkDeviceStatus(device.id))
+    );
+
+    // Filtrar dispositivos no saludables
+    const unhealthyDevices = deviceStatuses.filter(status => !status.healthy);
+    
+    res.json({ unhealthyDevices });
+  } catch (error) {
+    console.error('Error obteniendo dispositivos no saludables:', error);
+    res.status(500).json({ 
+      error: 'Error obteniendo dispositivos no saludables',
+      message: 'No se pudieron obtener los dispositivos de Mender'
+    });
+  }
+});
+
+// IMPORTANTE: Definir rutas protegidas ANTES de express.static para que los middlewares se ejecuten
+app.get('/protected.html', requireAuth, requireHealthyDevices, (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'protected.html'));
 });
 
-app.get('/dashboard.html', requireAuth, (_req, res) => {
+app.get('/dashboard.html', requireAuth, requireHealthyDevices, (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'dashboard.html'));
 });
 
-app.get('/devices.html', requireAuth, (_req, res) => {
+app.get('/devices.html', requireAuth, requireHealthyDevices, (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'devices.html'));
 });
 
-app.get('/profile.html', requireAuth, (_req, res) => {
+app.get('/profile.html', requireAuth, requireHealthyDevices, (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'profile.html'));
 });
 
-app.get('/settings.html', requireAuth, (_req, res) => {
+app.get('/settings.html', requireAuth, requireHealthyDevices, (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'settings.html'));
 });
+
+// Servir archivos estáticos (CSS, JS, imágenes, etc.) DESPUÉS de las rutas protegidas
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 app.get('/logout', (req, res) => {
   const sessionId = req.signedCookies?.[SESSION_COOKIE] ?? req.cookies?.[SESSION_COOKIE];
@@ -299,6 +419,6 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(config.port, () => {
-  console.log(`Mini-app escuchando en ${config.port}`);
+  console.log(`Taller 2 Ciber escuchando en ${config.port}`);
 });
 
