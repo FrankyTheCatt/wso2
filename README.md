@@ -82,7 +82,34 @@ Esta aplicación implementa un sistema de control de acceso de dos niveles:
 - **PKCE Mandatory**: Opcional (déjalo desmarcado si no lo usas)
 - **Access Token Binding Type**: NONE
 
-## Instalación y Configuración
+## Despliegue Rápido con Docker (Recomendado)
+
+Esta es la forma más sencilla de ejecutar la aplicación, ya que configura automáticamente la aplicación Node.js y Nginx como proxy reverso en contenedores aislados.
+
+### Prerrequisitos
+- Docker y Docker Compose instalados
+
+### Pasos
+
+1. **Configurar variables de entorno**
+   Copia `env.sample` a `.env` y ajusta los valores (ver sección de Configuración de WSO2 más abajo):
+   ```bash
+   cp env.sample .env
+   ```
+
+2. **Ejecutar con Docker Compose**
+   ```bash
+   docker-compose up -d --build
+   ```
+
+   Esto iniciará:
+   - Contenedor de la aplicación (interno en puerto 3000)
+   - Contenedor Nginx (expuesto en puerto 80)
+
+3. **Acceder**
+   La aplicación estará disponible en `http://localhost` (o tu IP).
+
+## Instalación y Configuración Manual
 
 ### 1. Instalar dependencias de Node.js
 
